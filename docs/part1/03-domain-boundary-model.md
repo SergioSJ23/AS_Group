@@ -32,19 +32,13 @@ These two BUs share the Northstar group platform (nopCommerce) but have distinct
 **External boundary:** Exposes OIDC tokens; BUs consume identity, do not own it  
 **Does NOT contain:** BU-specific roles, BU customer preferences
 
-```
-┌─────────────────────────────────┐
-│       Group Identity (BC1)      │
-│                                 │
-│  Customer (global identity)     │
-│  Group Roles (Registered, etc.) │
-│  SSO / OIDC (Keycloak)          │
-│  External Auth (OAuth providers)│
-└──────────────┬──────────────────┘
-               │ token / customer_id
-     ┌─────────┴─────────┐
-     ▼                   ▼
-  BU1 Context         BU2 Context
+```mermaid
+flowchart TD
+    BC1["<b>BC1 — Group Identity</b><br/>Customer (global identity)<br/>Group Roles (Registered, etc.)<br/>SSO / OIDC (Keycloak)<br/>External Auth (OAuth providers)"]
+    BU1[BU1 Context]
+    BU2[BU2 Context]
+    BC1 -->|token / customer_id| BU1
+    BC1 -->|token / customer_id| BU2
 ```
 
 ### BC2 — BU1 Commerce (HomeStyle)
@@ -76,35 +70,22 @@ These two BUs share the Northstar group platform (nopCommerce) but have distinct
 
 ## Context Map
 
-```
-                    ┌──────────────────────────────────────┐
-                    │         Northstar Living Group        │
-                    └──────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph NLG[Northstar Living Group]
+        BC1["<b>BC1 — Group Identity</b><br/>Keycloak"]
+        BC4["<b>BC4 — Group Customer Profile</b><br/>CRM / EspoCRM"]
+        BC2["<b>BC2 — BU1 Commerce</b> (HomeStyle)<br/>nopCommerce Store 1<br/>+ BU1 ERP"]
+        BC3["<b>BC3 — BU2 Commerce</b> (WorkSpace)<br/>nopCommerce Store 2<br/>+ BU2 ERP"]
+        BC5["<b>BC5 — Shared Infrastructure</b><br/>RabbitMQ · Meilisearch · Notifications"]
+    end
 
-      ┌──────────────────┐          ┌──────────────────┐
-      │  BC1: Group      │          │  BC4: Group      │
-      │  Identity        │          │  Customer Profile │
-      │  (Keycloak)      │          │  (CRM / EspoCRM) │
-      └────────┬─────────┘          └─────────┬────────┘
-               │ OIDC token                   ▲ order events (async)
-               │                              │
-     ┌─────────┴──────────┐       ┌───────────┴──────────┐
-     │  BC2: BU1 Commerce │       │  BC3: BU2 Commerce   │
-     │  (HomeStyle)        │       │  (WorkSpace)          │
-     │                     │       │                       │
-     │  nopCommerce        │       │  nopCommerce          │
-     │  Store 1            │       │  Store 2              │
-     │  + BU1 ERP          │       │  + BU2 ERP            │
-     └─────────────────────┘       └───────────────────────┘
-               │                              │
-               └──────────────┬───────────────┘
-                              ▼
-                  ┌───────────────────────┐
-                  │  BC5: Shared Infra    │
-                  │  (RabbitMQ,           │
-                  │   Meilisearch,        │
-                  │   Notifications)      │
-                  └───────────────────────┘
+    BC1 -->|OIDC token| BC2
+    BC1 -->|OIDC token| BC3
+    BC2 -->|order events async| BC4
+    BC3 -->|order events async| BC4
+    BC2 --> BC5
+    BC3 --> BC5
 ```
 
 ## Ownership of Major Responsibilities

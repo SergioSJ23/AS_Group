@@ -2,21 +2,22 @@
 
 ## Architecture Overview
 
-nopCommerce follows an **onion architecture** built on C# / ASP.NET Core. The fundamental rule is that inner layers have no dependencies on outer layers — all dependencies point inward toward the core:
+nopCommerce follows an **onion architecture** built on C# / ASP.NET Core. Dependencies only point inward; outer layers may reference any inner layer directly, not just the adjacent one.
 
-```
-Presentation (Nop.Web, Nop.Web.Framework)   [outermost]
-    └── Services (Nop.Services)
-            └── Data (Nop.Data)
-                    └── Core (Nop.Core/Domain)  [innermost — no dependencies]
-```
+![nopCommerce onion architecture (current state, source: upstream nopCommerce/docs)](./images/nopCommerceArchitecture.png)
 
-- **Nop.Core** is the centre of the architecture. It has no dependencies on other nopCommerce projects. It contains domain entities (`Order`, `Customer`, `Product`, etc.), caching, events, and helpers.
-- **Nop.Data** depends only on Nop.Core. It handles data persistence using Linq2DB with FluentMigrator for schema migrations.
-- **Nop.Services** depends on both Nop.Core and Nop.Data. It is the Business Access Layer — all business logic, validations, and calculations live here.
-- **Nop.Web / Nop.Web.Framework** is the outermost layer — the public storefront and admin panel, both within a single ASP.NET Core application.
+The solution is organised under `src/` into `Libraries/` (Core, Data, Services), `Presentation/` (Nop.Web, Nop.Web.Framework), `Plugins/` (source — built DLLs deploy into `Presentation/Nop.Web/Plugins/`), and `Tests/`. Dependency rules are enforced through project references in the `.csproj` files:
 
-Plugins extend the platform without modifying core — authentication, payments, shipping, search, and integrations are all plugin-based. Plugin DLLs deploy automatically to `Presentation\Nop.Web\Plugins`. The core layers share a single relational database with no hard service boundaries.
+| Project | Depends on | Responsibility |
+|---|---|---|
+| **Nop.Core** | (none) | Domain entities, caching abstractions, event contracts |
+| **Nop.Data** | Nop.Core | Data access via linq2db + FluentMigrator (SQL Server, MySQL, PostgreSQL) |
+| **Nop.Services** | Nop.Core, Nop.Data | Business logic: orders, tax, shipping, catalog, scheduled tasks |
+| **Nop.Web.Framework** | Nop.Core, Nop.Data, Nop.Services | Presentation infra: validation, bundling, middleware pipeline |
+| **Nop.Web** | all of the above | ASP.NET Core MVC: public store + admin area |
+| **Plugins** | Nop.Web or Nop.Web.Framework | Independent extensions with their own data access, controllers, and views |
+
+The core layers share a single relational database with no hard service boundaries, and the entire platform runs as a single ASP.NET Core process.
 
 ## Multi-Store Model
 
@@ -51,7 +52,7 @@ The following are the architectural conflicts identified in the codebase that di
 ### P2 — Customer identity is fully global
 `Customer.Email` and `Customer.Username` are global with no database-level uniqueness constraint (`CustomerBuilder.cs` maps both as `.AsString(1000).Nullable()` with no `.Unique()`). Uniqueness is enforced only at application level via `GetCustomerByEmailAsync` / `GetCustomerByUsernameAsync`, both of which query without any `StoreId` filter.
 
-`RegisteredInStoreId` is set at registration time (`CustomerService.cs:496, 534`). It is used in two non-access-control contexts: filtering customers for incomplete registration follow-up emails (`ProcessIncompleteRegistrationsTask.cs:85`) and routing notification emails to the correct store templates (`WorkflowMessageService.cs:2825`). It is **never used to restrict a customer's access to any store** — no middleware, policy, or checkout query filters by `RegisteredInStoreId`.
+`RegisteredInStoreId` is set at registration time (`Nop.Web/Controllers/CustomerController.cs:804` for storefront sign-ups, `Nop.Web/Areas/Admin/Controllers/CustomerController.cs:354` for admin-created customers). It is used in two non-access-control contexts: filtering customers for incomplete registration follow-up emails (`ProcessIncompleteRegistrationsTask.cs:85`) and routing notification emails to the correct store templates (`WorkflowMessageService.cs:2825`). It is **never used to restrict a customer's access to any store** — no middleware, policy, or checkout query filters by `RegisteredInStoreId`.
 
 `CustomerRole` has no `StoreId` field. Roles like "Wholesale Buyer" or "VIP Member" are group-wide, not BU-specific.
 
@@ -62,10 +63,14 @@ The following are the architectural conflicts identified in the codebase that di
 
 **Impact:** BUs cannot maintain independent inventory assumptions or stock allocation. A stock depletion in BU1 is a stock depletion everywhere.
 
-### P4 — No group-level coordination mechanism
-There is no event bus, message broker, or integration event system in the core platform. Cross-store (cross-BU) data synchronisation is not supported natively. If BU1 needs to propagate a price change to a shared catalog, there is no mechanism to do so reliably.
+### P4 — No cross-process coordination mechanism
+nopCommerce does have an in-process event system: `IEventPublisher` (defined in Nop.Core) with `IConsumer<T>` handlers (in Nop.Services), plus automatic `EntityInsertedEvent<T>` / `EntityUpdatedEvent<T>` / `EntityDeletedEvent<T>` fired by `EntityRepository<T>` on every CRUD operation. However, this system is unsuitable for federation:
 
-**Impact:** Any federated behaviour (shared customer profiles, catalog sync, event-driven consistency) requires external infrastructure.
+- **In-process only** — events do not cross process or BU boundaries; there is no broker
+- **Sequential dispatch** — consumers are awaited one after another; a slow consumer blocks the publisher
+- **No durability** — if a consumer is unavailable, the event is lost (errors are caught and logged, but not retried or persisted)
+
+**Impact:** Any federated behaviour across BUs (shared customer profiles, catalog sync, event-driven consistency) requires external messaging infrastructure. The existing event abstraction can serve as a publish point, but the transport must be replaced or augmented with a durable broker.
 
 ### P5 — Settings eventual consistency
 When `StoreId = 0` (global) settings are updated, all stores are affected immediately with no coordination or approval step. There is no per-BU setting ownership or governance.
