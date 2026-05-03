@@ -2,16 +2,21 @@
 
 ## Architecture Overview
 
-nopCommerce is a **modular monolith** built on C# / ASP.NET Core, following a layered / onion-style structure:
+nopCommerce follows an **onion architecture** built on C# / ASP.NET Core. The fundamental rule is that inner layers have no dependencies on outer layers — all dependencies point inward toward the core:
 
 ```
-Presentation (Nop.Web, Nop.Web.Framework)
+Presentation (Nop.Web, Nop.Web.Framework)   [outermost]
     └── Services (Nop.Services)
-            └── Domain (Nop.Core/Domain)
-                    └── Data (Nop.Data)
+            └── Data (Nop.Data)
+                    └── Core (Nop.Core/Domain)  [innermost — no dependencies]
 ```
 
-Plugins extend the platform without modifying core — authentication, payments, shipping, search, and integrations are all plugin-based. The core layers share a single relational database with no hard service boundaries.
+- **Nop.Core** is the centre of the architecture. It has no dependencies on other nopCommerce projects. It contains domain entities (`Order`, `Customer`, `Product`, etc.), caching, events, and helpers.
+- **Nop.Data** depends only on Nop.Core. It handles data persistence using Linq2DB with FluentMigrator for schema migrations.
+- **Nop.Services** depends on both Nop.Core and Nop.Data. It is the Business Access Layer — all business logic, validations, and calculations live here.
+- **Nop.Web / Nop.Web.Framework** is the outermost layer — the public storefront and admin panel, both within a single ASP.NET Core application.
+
+Plugins extend the platform without modifying core — authentication, payments, shipping, search, and integrations are all plugin-based. Plugin DLLs deploy automatically to `Presentation\Nop.Web\Plugins`. The core layers share a single relational database with no hard service boundaries.
 
 ## Multi-Store Model
 
@@ -68,7 +73,7 @@ When `StoreId = 0` (global) settings are updated, all stores are affected immedi
 **Impact:** A group-level admin change can affect all BUs simultaneously with no isolation.
 
 ### P6 — `IgnoreStoreLimitations` is a global bypass
-`CatalogSettings.IgnoreStoreLimitations` (line 400) is a boolean setting. When `true`, `ApplyStoreMapping` short-circuits immediately (`StoreMappingService.cs:95`) and returns the full unfiltered query regardless of any `LimitedToStores` flags or `StoreMapping` records. All catalog isolation is silently disabled.
+`CatalogSettings.IgnoreStoreLimitations` is a boolean setting. When `true`, `ApplyStoreMapping` short-circuits immediately (`StoreMappingService.cs:95`) and returns the full unfiltered query regardless of any `LimitedToStores` flags or `StoreMapping` records. All catalog isolation is silently disabled.
 
 **Impact:** A single admin toggle disables all BU-level product isolation with no warning. This is a latent architectural risk for any federated deployment.
 
