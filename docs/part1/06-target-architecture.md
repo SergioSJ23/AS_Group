@@ -220,16 +220,35 @@ flowchart LR
 
 **No shared database** spans extracted boundaries. **Eight independently deployable subsystems** in total - one chosen as the architectural anchor for the demo: the **OIDC + outbox plug-in pair on nopCommerce**, since that is where the federation tension is most visible.
 
+## Cross-Cutting Concerns That Shape The Design
+
+Some concerns are not owned by a single iteration. They constrain every iteration and run through the whole architecture.
+
+| Concern | How it is addressed | Where it surfaces |
+|---|---|---|
+| **BU scoping** | Every persisted row, every event payload, every search document carries `bu_id` / `store_id`. Group-level reads aggregate explicitly; nothing is implicitly group-wide. | ADR-005 (catalog), ADR-002 (event routing key), ADR-004 (index field) |
+| **Identity and authorization** | Keycloak is the only issuer; tokens carry group claims; each BU maps Keycloak groups to local roles through a single mapping table loaded at startup and checked into git. No two BUs share local role IDs (prefix convention `bu1.*` / `bu2.*`). | ADR-001, ADR-005, R10 mitigation |
+| **Secrets and configuration** | Connection strings, broker URIs, OIDC client secrets, ERP credentials live in environment variables (or Docker secrets in the demo). The claim-to-role mapping is config-as-code. No secret stored in DB. | spike `appsettings.json`, `docker-compose.spike.yml` |
+| **Observability** | Structured logs include `bu_id`, `correlation_id`, `customer_sub`. Metrics tracked: breaker state transitions, outbox lag (rows waiting to publish), search fallback rate, consumer lag per queue. Traces propagate `correlation_id` from the storefront through the broker to consumers. | Iterations 2, 3, 4 |
+| **Reliability primitives** | One timeout + retry + circuit-breaker policy reused across ERP calls, broker publish, and search reads. Defined once in a shared library, configured per integration. | ADR-003, ADR-004 |
+| **Consistency model** | Strong consistency inside a BU DB. Eventual consistency between BUs and to group services, bounded by QA5 (≤30 s normal, ≤24 h under degradation). Made visible to the user in the UI when bounds slip. | QA5, ADR-002 |
+| **Contract versioning** | Event payloads carry an explicit `version` field. Consumers ignore unknown fields and fail loud on missing required ones. Adding a field is non-breaking; renaming or removing requires a new event type and parallel publication during transition. | ADR-002 |
+| **Failure-mode UX** | Degradation is always visible to the user (banner, "stock to be confirmed", "limited results"). No silent fallbacks. | ADR-003, ADR-004 |
+
 ## Evolution Path From Current State
 
-| Step | Change | Driver | Risk |
-|---|---|---|---|
-| 1 | Install Keycloak; build OIDC plug-in implementing `IExternalAuthenticationMethod`; flip storefront login | QA3 | Identity becomes group SPOF - mitigate with HA pair |
-| 2 | Enforce mandatory `StoreMapping`; disable `IgnoreStoreLimitations` at startup | QA2 | One-time data-migration scan to assign every product to at least one store |
-| 3 | Stand up RabbitMQ; add outbox table + relay; bridge `EntityInsertedEvent<Order>` to broker | QA5 | Outbox + idempotency must be correct or the whole bus is unreliable |
-| 4 | Stand up EspoCRM; subscribe to `*.order.placed`; backfill historical orders from per-BU DBs | QA5 | Backfill volume |
-| 5 | Stand up Meilisearch; index per BU with BU tag; switch storefront search to it with DB fallback | QA4 | Index drift during fallback |
-| 6 | Per BU: stand up ERP (ERPNext / Odoo), add ACL + circuit breaker, swap stock reads | QA1 | ERP-side data model divergence - kept inside the ACL |
+The transition is staged so that each step can ship independently without breaking the others. The "Must coexist with" column shows what stays alive (and unchanged) during that step so the system never lands in a half-migrated state.
+
+| Step | Change | Driver | Must coexist with | Risk |
+|---|---|---|---|---|
+| 1 | Install Keycloak HA pair; build OIDC plug-in implementing `IExternalAuthenticationMethod`; enable on storefront | QA3 | Native nopCommerce password login stays on for legacy accounts until cutover; customers linked by email on first SSO | Identity becomes group SPOF - HA pair + short-lived tokens |
+| 2 | Run a one-shot migration to assign every existing product to at least one store; then enforce mandatory `StoreMapping` and pin `IgnoreStoreLimitations = false` at startup | QA2 | Migration runs in deploy N; enforcement turns on in deploy N+1, after a verified scan | Products without mapping cause startup failure if migration was incomplete |
+| 3 | Stand up RabbitMQ; add `Outbox` table + relay; bridge `EntityInsertedEvent<Order>` to broker | QA5 | In-process `IEventPublisher` keeps working for in-process consumers; broker handles only events that need to cross process boundaries | Outbox + idempotent consumer must be correct on day one |
+| 4 | Stand up EspoCRM; subscribe to `*.order.placed`; backfill historical orders from per-BU DBs | QA5 | BU storefronts continue serving live orders during backfill; idempotent upserts on `OrderId` keep the backfill safe to overlap with live traffic | Backfill volume; duplicate records if idempotency key wrong |
+| 5 | Stand up Meilisearch; indexer subscribes to product events; switch storefront search to Meilisearch with circuit-breaker fallback to DB | QA4 | DB search path remains permanently - it is the fallback, not a transitional artifact | Index drift during fallback bounded by RabbitMQ retention |
+| 6 | Per BU: stand up local ERP (ERPNext for BU1, Odoo for BU2); insert ACL + circuit breaker; swap stock reads from local DB to ERP-via-ACL | QA1 | nopCommerce stock fields remain populated as the cached "last known good" snapshot, used during ERP outage | ERP-side data model divergence - contained inside the ACL |
+
+**Rollback safety.** Steps 1, 5, and 6 can be rolled back by config alone (disable plug-in, flip search strategy default, disable ERP integration). Steps 2, 3, 4 involve schema or external state and need a documented backout (drop outbox table; CRM consumer pause; revert mapping enforcement flag).
 
 ## How This Satisfies The Required Technical Shape
 

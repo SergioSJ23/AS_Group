@@ -40,30 +40,20 @@ Risks are scored on a 1–3 scale for **probability** (P) and **impact** (I), wi
 
 ### Risk Heatmap
 
-```mermaid
-quadrantChart
-    title Risk heatmap (probability × impact)
-    x-axis "Low impact" --> "High impact"
-    y-axis "Low probability" --> "High probability"
-    quadrant-1 "Watch closely"
-    quadrant-2 "Attack first"
-    quadrant-3 "Ignore for now"
-    quadrant-4 "Cheap wins"
-    R1 - Keycloak SPOF: [0.95, 0.6]
-    R2 - Outbox bug: [0.95, 0.6]
-    R3 - Toggle re-enabled: [0.95, 0.25]
-    R4 - Migration drift: [0.95, 0.6]
-    R10 - Role bleed: [0.95, 0.6]
-    R5 - RabbitMQ outage: [0.6, 0.6]
-    R7 - Breaker flap: [0.6, 0.6]
-    R8 - Pending fulfilment: [0.6, 0.6]
-    R9 - Schema drift: [0.6, 0.6]
-    R12 - Laptop sizing: [0.6, 0.6]
-    R11 - Stale snapshot: [0.3, 0.6]
-    R6 - Index drift: [0.6, 0.3]
-```
+Risks plotted on a 3×3 P×I grid. **Bold** entries are score ≥ 6 (primary risks). R3 is also flagged as a primary risk: probability is low but impact is group-wide isolation collapse, so it earns a mitigation slot regardless of score.
 
-The five risks in the **Attack first** quadrant (R1, R2, R4, R10 - and R3 with high impact at low probability) are the primary targets for the feasibility spike below and for Part 2 mitigation work.
+| | **I=1 (Low impact)** | **I=2 (Medium impact)** | **I=3 (High impact)** |
+|---|---|---|---|
+| **P=3 (High probability)** | - | - | - |
+| **P=2 (Medium probability)** | R11 (stale snapshot) | R5 (RabbitMQ outage), R7 (breaker flap), R8 (pending fulfilment), R9 (schema drift), R12 (laptop sizing) | **R1 (Keycloak SPOF)**, **R2 (outbox bug)**, **R4 (migration drift)**, **R10 (role bleed)** |
+| **P=1 (Low probability)** | - | R6 (index drift) | *R3 (toggle re-enabled)* |
+
+**Action by zone.**
+
+- **Attack first** (top-right, bold): R1, R2, R4, R10 - primary targets for the feasibility spike and Part 2 mitigation work.
+- **Watch closely** (bottom-right, italic): R3 - low probability but catastrophic; mitigated by removing the admin toggle entirely (ADR-005).
+- **Plan for** (medium cell): R5, R7, R8, R9, R12 - acceptable risks with named mitigations; revisit if frequency or impact shifts during Part 2.
+- **Background** (R6, R11): tracked but not actively mitigated until evidence shows score change.
 
 ## Feasibility Spike
 
