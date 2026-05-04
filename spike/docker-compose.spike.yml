@@ -68,8 +68,6 @@ services:
         condition: service_healthy
     extra_hosts:
       - "keycloak.localtest.me:host-gateway"
-    volumes:
-      - ./app-data/bu1/appsettings.json:/app/App_Data/appsettings.json
   # ── nopCommerce BU2 (WorkSpace) ───────────────────────────────────────────
   nop_bu2:
     build:
@@ -84,8 +82,6 @@ services:
         condition: service_healthy
     extra_hosts:
       - "keycloak.localtest.me:host-gateway"
-    volumes:
-      - ./app-data/bu2/appsettings.json:/app/App_Data/appsettings.json
 
 volumes:
   db_bu1_data:

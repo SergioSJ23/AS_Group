@@ -29,9 +29,16 @@ public class KeycloakAuthenticationRegistrar : IExternalAuthenticationRegistrar
 
             // Authorization Code flow (PKCE is added automatically by the middleware)
             options.ResponseType = "code";
-            options.ResponseMode = "query"; // avoid form_post so SameSite=Lax cookies are sent back
+            options.ResponseMode = "query";
             options.SaveTokens = true;
             options.RequireHttpsMetadata = false; // HTTP is acceptable in the dev spike
+
+            // SameSite=None (default) requires Secure; over HTTP the browser drops the cookie
+            // causing "Correlation failed". Lax works because Keycloak → BU is a top-level GET.
+            options.CorrelationCookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
+            options.CorrelationCookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
+            options.NonceCookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
+            options.NonceCookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
             options.GetClaimsFromUserInfoEndpoint = true;
 
             options.Scope.Clear();
