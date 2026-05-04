@@ -1,0 +1,11 @@
+{
+  "Group": "ExternalAuth methods",
+  "FriendlyName": "Keycloak authentication",
+  "SystemName": "ExternalAuth.Keycloak",
+  "Version": "1.00.0",
+  "SupportedVersions": [ "5.00" ],
+  "Author": "Northstar Living Group",
+  "DisplayOrder": 1,
+  "FileName": "Nop.Plugin.ExternalAuth.Keycloak.dll",
+  "Description": "SSO via Keycloak OIDC — federated identity across BUs (feasibility spike)"
+}

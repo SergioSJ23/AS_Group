@@ -1,0 +1,92 @@
+services:
+
+  # ── Keycloak (dev mode, realm auto-imported) ──────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: keycloak.localtest.me
+      KC_HOSTNAME_PORT: "8080"
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/realm-northstar.json:/opt/keycloak/data/import/realm-northstar.json:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # ── PostgreSQL for BU1 ────────────────────────────────────────────────────
+  db_bu1:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nop_bu1
+      POSTGRES_USER: nop
+      POSTGRES_PASSWORD: noppassword
+    volumes:
+      - db_bu1_data:/var/lib/postgresql/data
+      - ./pg-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nop -d nop_bu1"]
+      interval: 5s
+      retries: 10
+
+  # ── PostgreSQL for BU2 ────────────────────────────────────────────────────
+  db_bu2:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nop_bu2
+      POSTGRES_USER: nop
+      POSTGRES_PASSWORD: noppassword
+    volumes:
+      - db_bu2_data:/var/lib/postgresql/data
+      - ./pg-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nop -d nop_bu2"]
+      interval: 5s
+      retries: 10
+
+  # ── nopCommerce BU1 (HomeStyle) ───────────────────────────────────────────
+  nop_bu1:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "8081:80"
+    depends_on:
+      db_bu1:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    extra_hosts:
+      - "keycloak.localtest.me:host-gateway"
+    volumes:
+      - ./app-data/bu1/appsettings.json:/app/App_Data/appsettings.json
+  # ── nopCommerce BU2 (WorkSpace) ───────────────────────────────────────────
+  nop_bu2:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "8082:80"
+    depends_on:
+      db_bu2:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    extra_hosts:
+      - "keycloak.localtest.me:host-gateway"
+    volumes:
+      - ./app-data/bu2/appsettings.json:/app/App_Data/appsettings.json
+
+volumes:
+  db_bu1_data:
+  db_bu2_data:

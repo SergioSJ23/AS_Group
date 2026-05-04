@@ -1,0 +1,78 @@
+{
+  "realm": "northstar",
+  "enabled": true,
+  "displayName": "Northstar Living Group",
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "ssoSessionMaxLifespan": 36000,
+  "accessTokenLifespan": 300,
+  "groups": [
+    {
+      "name": "verified-customer",
+      "path": "/verified-customer"
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "bu1-nopcommerce",
+      "name": "BU1 HomeStyle nopCommerce",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "bu1-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://bu1.localtest.me:8081/*",
+        "http://localhost:8081/*"
+      ],
+      "webOrigins": [
+        "http://bu1.localtest.me:8081",
+        "http://localhost:8081"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://bu1.localtest.me:8081/*"
+      }
+    },
+    {
+      "clientId": "bu2-nopcommerce",
+      "name": "BU2 WorkSpace nopCommerce",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "bu2-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://bu2.localtest.me:8082/*",
+        "http://localhost:8082/*"
+      ],
+      "webOrigins": [
+        "http://bu2.localtest.me:8082",
+        "http://localhost:8082"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://bu2.localtest.me:8082/*"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "email": "alice@example.com",
+      "firstName": "Alice",
+      "lastName": "Northstar",
+      "enabled": true,
+      "emailVerified": true,
+      "groups": ["/verified-customer"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alice123",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

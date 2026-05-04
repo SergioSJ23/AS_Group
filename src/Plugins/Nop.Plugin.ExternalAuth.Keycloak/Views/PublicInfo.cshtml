@@ -1,0 +1,13 @@
+@{
+    Layout = "";
+}
+<div class="keycloak-login-block">
+    <div class="buttons">
+        <a asp-controller="keycloakauthentication"
+           asp-action="login"
+           asp-route-returnurl="@Context.Request.Query["ReturnUrl"]"
+           class="button-1 keycloak-btn">
+            Login with Keycloak (SSO)
+        </a>
+    </div>
+</div>

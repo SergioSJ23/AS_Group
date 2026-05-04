@@ -1,0 +1,4 @@
+{
+  "DataProvider": "postgresql",
+  "ConnectionString": "Host=db_bu2;Port=5432;Database=nop_bu2;Username=nop;Password=noppassword;"
+}
