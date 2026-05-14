@@ -172,6 +172,11 @@ services:
       MEILISEARCH_KEY: northstar-meili-master-key
       ERP_URI: http://erp_bu1:8080
       BU_ID: bu1
+      # ADR-002: per-BU OIDC client. Authority uses the host-resolvable name so the
+      # browser-side redirect chain stays consistent with the backchannel discovery doc.
+      KEYCLOAK_AUTHORITY: http://keycloak.localtest.me:8080/realms/northstar
+      KEYCLOAK_CLIENT_ID: bu1-nopcommerce
+      KEYCLOAK_CLIENT_SECRET: bu1-secret
     volumes:
       - nop_bu1_app_data:/app/App_Data
     depends_on:
@@ -201,6 +206,10 @@ services:
       MEILISEARCH_KEY: northstar-meili-master-key
       ERP_URI: http://erp_bu2:8080
       BU_ID: bu2
+      # ADR-002: per-BU OIDC client. See nop_bu1 for rationale on the authority hostname.
+      KEYCLOAK_AUTHORITY: http://keycloak.localtest.me:8080/realms/northstar
+      KEYCLOAK_CLIENT_ID: bu2-nopcommerce
+      KEYCLOAK_CLIENT_SECRET: bu2-secret
     volumes:
       - nop_bu2_app_data:/app/App_Data
     depends_on:

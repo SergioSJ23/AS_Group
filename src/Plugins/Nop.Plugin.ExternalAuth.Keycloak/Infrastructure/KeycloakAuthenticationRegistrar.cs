@@ -13,19 +13,30 @@ public class KeycloakAuthenticationRegistrar : IExternalAuthenticationRegistrar
         {
             var settings = EngineContext.Current.Resolve<KeycloakExternalAuthSettings>();
 
-            // Use placeholder when not yet configured — prevents startup crash.
-            // The Login action checks configuration before issuing a Challenge.
-            options.Authority = string.IsNullOrEmpty(settings?.Authority)
+            // Resolution order: DB-stored admin settings → environment variables → safe placeholder.
+            // Env-var fallback lets compose seed per-BU OIDC config without an admin click-through
+            // on a fresh install. Admin UI still wins when set, so demos can override at runtime.
+            var authority = FirstNonEmpty(
+                settings?.Authority,
+                Environment.GetEnvironmentVariable("KEYCLOAK_AUTHORITY"));
+            var clientId = FirstNonEmpty(
+                settings?.ClientId,
+                Environment.GetEnvironmentVariable("KEYCLOAK_CLIENT_ID"));
+            var clientSecret = FirstNonEmpty(
+                settings?.ClientSecret,
+                Environment.GetEnvironmentVariable("KEYCLOAK_CLIENT_SECRET"));
+
+            options.Authority = string.IsNullOrEmpty(authority)
                 ? "https://placeholder-not-configured"
-                : settings.Authority;
+                : authority;
 
-            options.ClientId = string.IsNullOrEmpty(settings?.ClientId)
+            options.ClientId = string.IsNullOrEmpty(clientId)
                 ? nameof(options.ClientId)
-                : settings.ClientId;
+                : clientId;
 
-            options.ClientSecret = string.IsNullOrEmpty(settings?.ClientSecret)
+            options.ClientSecret = string.IsNullOrEmpty(clientSecret)
                 ? nameof(options.ClientSecret)
-                : settings.ClientSecret;
+                : clientSecret;
 
             // Authorization Code flow (PKCE is added automatically by the middleware)
             options.ResponseType = "code";
@@ -64,4 +75,7 @@ public class KeycloakAuthenticationRegistrar : IExternalAuthenticationRegistrar
             };
         });
     }
+
+    private static string FirstNonEmpty(params string[] candidates)
+        => candidates.FirstOrDefault(c => !string.IsNullOrEmpty(c));
 }

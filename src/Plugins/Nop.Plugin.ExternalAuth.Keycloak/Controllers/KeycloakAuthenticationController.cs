@@ -102,8 +102,15 @@ public class KeycloakAuthenticationController : BasePluginController
         if (!methodIsAvailable)
             throw new NopException("Keycloak authentication module cannot be loaded");
 
-        if (string.IsNullOrEmpty(_settings.Authority) || string.IsNullOrEmpty(_settings.ClientId))
-            throw new NopException("Keycloak authentication module not configured — set Authority and ClientId in admin");
+        var authority = !string.IsNullOrEmpty(_settings.Authority)
+            ? _settings.Authority
+            : Environment.GetEnvironmentVariable("KEYCLOAK_AUTHORITY");
+        var clientId = !string.IsNullOrEmpty(_settings.ClientId)
+            ? _settings.ClientId
+            : Environment.GetEnvironmentVariable("KEYCLOAK_CLIENT_ID");
+
+        if (string.IsNullOrEmpty(authority) || string.IsNullOrEmpty(clientId))
+            throw new NopException("Keycloak authentication module not configured — set Authority and ClientId in admin or via KEYCLOAK_AUTHORITY / KEYCLOAK_CLIENT_ID env vars");
 
         var authenticationProperties = new AuthenticationProperties
         {
