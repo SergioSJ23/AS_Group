@@ -1,18 +1,213 @@
+name: northstar
+
+# Full federated commerce infrastructure (Phase 0 of IMPLEMENTATION_PLAN.md).
+# Replaces the legacy single-instance compose and the spike compose.
+# Brings up the 8 subsystems referenced by ADRs 001-005 in one `docker compose up`.
+
 services:
-    nopcommerce_web:
-        build: .
-        container_name: nopcommerce
-        ports:
-            - "80:80"
-        depends_on:
-            - nopcommerce_database
-    nopcommerce_database:
-        image: "mcr.microsoft.com/mssql/server:2019-latest"
-        container_name: nopcommerce_mssql_server
-        environment:
-            SA_PASSWORD: "nopCommerce_db_password"
-            ACCEPT_EULA: "Y"
-            MSSQL_PID: "Express"
+
+  # ── Keycloak (group IdP, realm auto-imported) ─────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: keycloak.localtest.me
+      KC_HOSTNAME_PORT: "8080"
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./spike/keycloak/realm-northstar.json:/opt/keycloak/data/import/realm-northstar.json:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # ── PostgreSQL for BU1 ────────────────────────────────────────────────────
+  db_bu1:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nop_bu1
+      POSTGRES_USER: nop
+      POSTGRES_PASSWORD: noppassword
+    volumes:
+      - db_bu1_data:/var/lib/postgresql/data
+      - ./spike/pg-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nop -d nop_bu1"]
+      interval: 5s
+      retries: 10
+
+  # ── PostgreSQL for BU2 ────────────────────────────────────────────────────
+  db_bu2:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nop_bu2
+      POSTGRES_USER: nop
+      POSTGRES_PASSWORD: noppassword
+    volumes:
+      - db_bu2_data:/var/lib/postgresql/data
+      - ./spike/pg-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nop -d nop_bu2"]
+      interval: 5s
+      retries: 10
+
+  # ── RabbitMQ (transactional outbox broker, ADR-003) ───────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: northstar
+      RABBITMQ_DEFAULT_PASS: northstar
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Meilisearch (federated search engine, ADR-005) ────────────────────────
+  meilisearch:
+    image: getmeili/meilisearch:v1.7
+    environment:
+      MEILI_ENV: development
+      MEILI_MASTER_KEY: northstar-meili-master-key
+    ports:
+      - "7700:7700"
+    volumes:
+      - meilisearch_data:/meili_data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── EspoCRM database (MariaDB) ────────────────────────────────────────────
+  espocrm_db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_ROOT_PASSWORD: espocrm_root
+      MARIADB_DATABASE: espocrm
+      MARIADB_USER: espocrm
+      MARIADB_PASSWORD: espocrm
+    volumes:
+      - espocrm_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── EspoCRM (single source of customer truth, ADR-003 consumer) ───────────
+  espocrm:
+    image: espocrm/espocrm:latest
+    depends_on:
+      espocrm_db:
+        condition: service_healthy
+    environment:
+      ESPOCRM_DATABASE_HOST: espocrm_db
+      ESPOCRM_DATABASE_NAME: espocrm
+      ESPOCRM_DATABASE_USER: espocrm
+      ESPOCRM_DATABASE_PASSWORD: espocrm
+      ESPOCRM_ADMIN_USERNAME: admin
+      ESPOCRM_ADMIN_PASSWORD: admin
+      ESPOCRM_SITE_URL: http://localhost:8083
+    ports:
+      - "8083:80"
+    volumes:
+      - espocrm_data:/var/www/html
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/api/v1/App/user"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # ── ERP stub for BU1 (ADR-004) ────────────────────────────────────────────
+  # TODO Phase 4: replace `image:` with `build: ./src/Workers/ErpStub` once stub exists.
+  erp_bu1:
+    image: mcr.microsoft.com/dotnet/samples:aspnetapp-chiseled
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ERP_BU_ID: bu1
+    ports:
+      - "9001:8080"
+
+  # ── ERP stub for BU2 (ADR-004) ────────────────────────────────────────────
+  # TODO Phase 4: replace `image:` with `build: ./src/Workers/ErpStub` once stub exists.
+  erp_bu2:
+    image: mcr.microsoft.com/dotnet/samples:aspnetapp-chiseled
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ERP_BU_ID: bu2
+    ports:
+      - "9002:8080"
+
+  # ── nopCommerce BU1 (HomeStyle) ───────────────────────────────────────────
+  nop_bu1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8081:80"
+    environment:
+      RABBITMQ_URI: amqp://northstar:northstar@rabbitmq:5672/
+      MEILISEARCH_URI: http://meilisearch:7700
+      MEILISEARCH_KEY: northstar-meili-master-key
+      ERP_URI: http://erp_bu1:8080
+      BU_ID: bu1
+    depends_on:
+      db_bu1:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    extra_hosts:
+      - "keycloak.localtest.me:host-gateway"
+
+  # ── nopCommerce BU2 (WorkSpace) ───────────────────────────────────────────
+  nop_bu2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8082:80"
+    environment:
+      RABBITMQ_URI: amqp://northstar:northstar@rabbitmq:5672/
+      MEILISEARCH_URI: http://meilisearch:7700
+      MEILISEARCH_KEY: northstar-meili-master-key
+      ERP_URI: http://erp_bu2:8080
+      BU_ID: bu2
+    depends_on:
+      db_bu2:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    extra_hosts:
+      - "keycloak.localtest.me:host-gateway"
 
 volumes:
-  nopcommerce_data:            
+  db_bu1_data:
+  db_bu2_data:
+  rabbitmq_data:
+  meilisearch_data:
+  espocrm_data:
+  espocrm_db_data:
