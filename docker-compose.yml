@@ -162,11 +162,18 @@ services:
     ports:
       - "8081:80"
     environment:
+      # Connection string is intentionally absent here so that IsDatabaseInstalled()
+      # returns false on a fresh volume, allowing the web installer to run and seed
+      # the DB. After the installer completes it writes App_Data/appsettings.json
+      # which is persisted via the volume and picked up on every subsequent restart.
+      # ADR-001: isolated connection — points only to db_bu1, never db_bu2
       RABBITMQ_URI: amqp://northstar:northstar@rabbitmq:5672/
       MEILISEARCH_URI: http://meilisearch:7700
       MEILISEARCH_KEY: northstar-meili-master-key
       ERP_URI: http://erp_bu1:8080
       BU_ID: bu1
+    volumes:
+      - nop_bu1_app_data:/app/App_Data
     depends_on:
       db_bu1:
         condition: service_healthy
@@ -187,11 +194,15 @@ services:
     ports:
       - "8082:80"
     environment:
+      # See nop_bu1 comment above — same pattern, isolated to db_bu2.
+      # ADR-001: isolated connection — points only to db_bu2, never db_bu1
       RABBITMQ_URI: amqp://northstar:northstar@rabbitmq:5672/
       MEILISEARCH_URI: http://meilisearch:7700
       MEILISEARCH_KEY: northstar-meili-master-key
       ERP_URI: http://erp_bu2:8080
       BU_ID: bu2
+    volumes:
+      - nop_bu2_app_data:/app/App_Data
     depends_on:
       db_bu2:
         condition: service_healthy
@@ -207,6 +218,8 @@ services:
 volumes:
   db_bu1_data:
   db_bu2_data:
+  nop_bu1_app_data:
+  nop_bu2_app_data:
   rabbitmq_data:
   meilisearch_data:
   espocrm_data:
