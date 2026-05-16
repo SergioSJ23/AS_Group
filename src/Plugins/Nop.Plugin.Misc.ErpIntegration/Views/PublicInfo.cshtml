@@ -1,0 +1,15 @@
+@model Nop.Plugin.Misc.ErpIntegration.Domain.StockResult
+
+@if (Model.IsStale)
+{
+    <div class="alert alert-warning erp-stale-banner" role="alert" style="margin-bottom:0.5rem">
+        <strong>&#9888; Stock to be confirmed</strong> &mdash;
+        Live inventory is temporarily unavailable. Shown quantity (@Model.Quantity) is an estimate from cached data.
+    </div>
+}
+else if (Model.Source == "live")
+{
+    <div class="erp-stock-live" style="font-size:0.9em;color:#555;margin-bottom:0.5rem">
+        &#10003; In stock: <strong>@Model.Quantity</strong> units available
+    </div>
+}

@@ -14,8 +14,18 @@
 
 set -euo pipefail
 
-ADMIN_EMAIL="${ADMIN_EMAIL:-admin@northstar.local}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-NorthstarAdmin1!}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
+
+# Detect admin email per-BU from the database (first non-system account).
+detect_admin_email () {
+    local db_container="$1" db_name="$2"
+    docker exec "$db_container" psql -U nop -d "$db_name" -tAc \
+        "SELECT \"Email\" FROM \"Customer\" WHERE \"IsSystemAccount\" = false AND \"Email\" IS NOT NULL ORDER BY \"Id\" LIMIT 1;" 2>/dev/null | tr -d '[:space:]'
+}
+
+ADMIN_EMAIL_BU1=$(detect_admin_email "northstar-db_bu1-1" "nop_bu1")
+ADMIN_EMAIL_BU2=$(detect_admin_email "northstar-db_bu2-1" "nop_bu2")
+echo "Detected admin emails: BU1=${ADMIN_EMAIL_BU1}  BU2=${ADMIN_EMAIL_BU2}"
 
 install_bu () {
     local bu="$1" host_port="$2" db_host="$3" db_name="$4"
@@ -64,7 +74,7 @@ install_bu () {
         -c "$cookies" -b "$cookies" \
         -X POST "${base}/Install/Index" \
         --data-urlencode "__RequestVerificationToken=${token}" \
-        --data-urlencode "AdminEmail=${ADMIN_EMAIL}" \
+        --data-urlencode "AdminEmail=$(bu_email "$bu")" \
         --data-urlencode "AdminPassword=${ADMIN_PASSWORD}" \
         --data-urlencode "ConfirmPassword=${ADMIN_PASSWORD}" \
         --data-urlencode "DataProvider=PostgreSQL" \
@@ -144,13 +154,16 @@ extract_token () {
         | sed -E 's/.*value="([^"]+)".*/\1/'
 }
 
+bu_email () {
+    if [ "$1" = "bu1" ]; then echo "$ADMIN_EMAIL_BU1"; else echo "$ADMIN_EMAIL_BU2"; fi
+}
+
 admin_login () {
-    local bu="$1" host_port="$2" cookies="$3"
+    local bu="$1" host_port="$2" cookies="$3" email="$4"
     local base="http://localhost:${host_port}"
     local html
     html=$(mktemp)
 
-    # /login GET seeds the antiforgery cookie + form token.
     curl -sS -c "$cookies" -b "$cookies" -o "$html" "${base}/login" || {
         echo "FAIL: ${bu} GET /login failed"; rm -f "$html"; return 1;
     }
@@ -164,12 +177,12 @@ admin_login () {
         -c "$cookies" -b "$cookies" \
         -X POST "${base}/login" \
         --data-urlencode "__RequestVerificationToken=${token}" \
-        --data-urlencode "Email=${ADMIN_EMAIL}" \
+        --data-urlencode "Email=${email}" \
         --data-urlencode "Password=${ADMIN_PASSWORD}" \
         --data-urlencode "RememberMe=false")
     case "$code" in
         302) ;;
-        *) echo "FAIL: ${bu} login POST returned HTTP ${code}"; return 1 ;;
+        *) echo "FAIL: ${bu} login POST returned HTTP ${code} (email=${email})"; return 1 ;;
     esac
 }
 
@@ -189,7 +202,7 @@ install_keycloak_plugin () {
     trap 'rm -f "$cookies"' RETURN
 
     echo "==> ${bu}: enabling ExternalAuth.Keycloak plugin"
-    admin_login "$bu" "$host_port" "$cookies" || return 1
+    admin_login "$bu" "$host_port" "$cookies" "$(bu_email "$bu")" || return 1
 
     if plugin_already_installed "$cookies" "$base"; then
         echo "    plugin already installed — skipping install step"
@@ -229,7 +242,7 @@ activate_keycloak_method () {
     trap 'rm -f "$cookies"' RETURN
 
     echo "==> ${bu}: marking Keycloak as active external auth method"
-    admin_login "$bu" "$host_port" "$cookies" || return 1
+    admin_login "$bu" "$host_port" "$cookies" "$(bu_email "$bu")" || return 1
 
     local html token code
     html=$(mktemp)
@@ -253,15 +266,89 @@ activate_keycloak_method () {
     esac
 }
 
-# Phase A: prepare + apply install for both BUs.
+install_erp_plugin () {
+    local bu="$1" host_port="$2"
+    local base="http://localhost:${host_port}"
+    local cookies
+    cookies=$(mktemp)
+    trap 'rm -f "$cookies"' RETURN
+
+    echo "==> ${bu}: enabling Misc.ErpIntegration plugin"
+    admin_login "$bu" "$host_port" "$cookies" "$(bu_email "$bu")" || return 1
+
+    # Already installed if the uninstall button is present.
+    if curl -sS -b "$cookies" -c "$cookies" "${base}/Admin/Plugin/List" \
+            | grep -q 'uninstall-plugin-link-Misc.ErpIntegration'; then
+        echo "    plugin already installed — skipping install step"
+        return 0
+    fi
+
+    local html token code
+    html=$(mktemp)
+    curl -sS -b "$cookies" -c "$cookies" -o "$html" "${base}/Admin/Plugin/List"
+    token=$(extract_token "$html")
+    rm -f "$html"
+    [ -n "$token" ] || { echo "FAIL: no token on ${bu} Plugin/List"; return 1; }
+
+    echo "    prepare install"
+    code=$(curl -sS -o /dev/null -w '%{http_code}' \
+        -b "$cookies" -c "$cookies" \
+        -X POST "${base}/Admin/Plugin/List" \
+        --data-urlencode "__RequestVerificationToken=${token}" \
+        --data-urlencode "install-plugin-link-Misc.ErpIntegration=1")
+    case "$code" in
+        200|302) ;;
+        *) echo "FAIL: ${bu} install POST returned HTTP ${code}"; return 1 ;;
+    esac
+
+    echo "    apply changes (triggers in-process restart)"
+    curl -sS -o /dev/null -b "$cookies" -c "$cookies" \
+        -X POST "${base}/Admin/Plugin/List" \
+        --data-urlencode "__RequestVerificationToken=${token}" \
+        --data-urlencode "plugin-apply-changes=1" || true
+}
+
+activate_erp_widget () {
+    local bu="$1" host_port="$2"
+    local base="http://localhost:${host_port}"
+    local cookies
+    cookies=$(mktemp)
+    trap 'rm -f "$cookies"' RETURN
+
+    echo "==> ${bu}: activating Misc.ErpIntegration widget"
+    admin_login "$bu" "$host_port" "$cookies" "$(bu_email "$bu")" || return 1
+
+    local html token code
+    html=$(mktemp)
+    curl -sS -b "$cookies" -c "$cookies" -o "$html" "${base}/Admin/Widget/List"
+    token=$(extract_token "$html")
+    rm -f "$html"
+    [ -n "$token" ] || { echo "FAIL: no token on ${bu} Widget/List"; return 1; }
+
+    code=$(curl -sS -o /dev/null -w '%{http_code}' \
+        -b "$cookies" -c "$cookies" \
+        -X POST "${base}/Admin/Widget/WidgetUpdate" \
+        -H "X-Requested-With: XMLHttpRequest" \
+        --data-urlencode "__RequestVerificationToken=${token}" \
+        --data-urlencode "SystemName=Misc.ErpIntegration" \
+        --data-urlencode "IsActive=true" \
+        --data-urlencode "DisplayOrder=1")
+    case "$code" in
+        200|204|302) echo "    widget active (HTTP ${code})" ;;
+        *) echo "FAIL: ${bu} widget activation returned HTTP ${code}"; return 1 ;;
+    esac
+}
+
+# Phase A: prepare + apply install for all plugins on both BUs.
 install_keycloak_plugin bu1 8081
 install_keycloak_plugin bu2 8082
+install_erp_plugin bu1 8081
+install_erp_plugin bu2 8082
 
-# Phase B: in nopCommerce, apply-changes triggers a host restart by stopping the
-# process. In Docker the container exits and doesn't auto-recover, so force a
-# clean restart and wait for the storefront before activating the method.
+# Phase B: apply-changes triggers an in-process restart; force a clean container
+# restart and wait for both storefronts before proceeding with activation.
 echo
-echo "==> Restarting nop containers so the newly installed plugin loads"
+echo "==> Restarting nop containers so newly installed plugins load"
 docker compose restart nop_bu1 nop_bu2 >/dev/null
 for port in 8081 8082; do
     if wait_for_storefront "$port"; then
@@ -272,11 +359,15 @@ for port in 8081 8082; do
     fi
 done
 
-# Phase C: activate the method on the now-loaded plugin.
+# Phase C: activate the methods/widgets on the now-loaded plugins.
 activate_keycloak_method bu1 8081
 activate_keycloak_method bu2 8082
+activate_erp_widget bu1 8081
+activate_erp_widget bu2 8082
 
 echo
-echo "nopCommerce installed for BU1 and BU2 with Keycloak SSO active."
-echo "Admin login: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}"
-echo "Try: ./scripts/test-sso.sh"
+echo "nopCommerce installed for BU1 and BU2."
+echo "  SSO:          Keycloak (ExternalAuth.Keycloak) active"
+echo "  ERP widget:   Misc.ErpIntegration active (circuit breaker + stock banner)"
+echo "Admin logins: BU1: ${ADMIN_EMAIL_BU1} / ${ADMIN_PASSWORD}  |  BU2: ${ADMIN_EMAIL_BU2} / ${ADMIN_PASSWORD}"
+echo "Try: ./scripts/test-sso.sh  |  ./scripts/test-erp-failure.sh"

@@ -1,0 +1,11 @@
+{
+  "Group": "Misc",
+  "FriendlyName": "ERP Integration (ADR-004)",
+  "SystemName": "Misc.ErpIntegration",
+  "Version": "1.0.0",
+  "SupportedVersions": [ "5.00" ],
+  "Author": "Northstar Living Group",
+  "DisplayOrder": 1,
+  "FileName": "Nop.Plugin.Misc.ErpIntegration.dll",
+  "Description": "BU-local ERP stock integration with circuit breaker. Injects live/stale stock indicator on product pages."
+}

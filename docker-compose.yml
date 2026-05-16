@@ -152,24 +152,36 @@ services:
     restart: on-failure
 
   # ── ERP stub for BU1 (ADR-004) ────────────────────────────────────────────
-  # TODO Phase 4: replace `image:` with `build: ./src/Workers/ErpStub` once stub exists.
   erp_bu1:
-    image: mcr.microsoft.com/dotnet/samples:aspnetapp-chiseled
+    build:
+      context: ./src/Workers/ErpStub
+      dockerfile: Dockerfile
     environment:
       ASPNETCORE_URLS: http://+:8080
       ERP_BU_ID: bu1
     ports:
       - "9001:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ── ERP stub for BU2 (ADR-004) ────────────────────────────────────────────
-  # TODO Phase 4: replace `image:` with `build: ./src/Workers/ErpStub` once stub exists.
   erp_bu2:
-    image: mcr.microsoft.com/dotnet/samples:aspnetapp-chiseled
+    build:
+      context: ./src/Workers/ErpStub
+      dockerfile: Dockerfile
     environment:
       ASPNETCORE_URLS: http://+:8080
       ERP_BU_ID: bu2
     ports:
       - "9002:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ── nopCommerce BU1 (HomeStyle) ───────────────────────────────────────────
   nop_bu1:
@@ -205,6 +217,8 @@ services:
         condition: service_healthy
       meilisearch:
         condition: service_healthy
+      erp_bu1:
+        condition: service_healthy
     extra_hosts:
       - "keycloak.localtest.me:host-gateway"
 
@@ -237,6 +251,8 @@ services:
       rabbitmq:
         condition: service_healthy
       meilisearch:
+        condition: service_healthy
+      erp_bu2:
         condition: service_healthy
     extra_hosts:
       - "keycloak.localtest.me:host-gateway"
