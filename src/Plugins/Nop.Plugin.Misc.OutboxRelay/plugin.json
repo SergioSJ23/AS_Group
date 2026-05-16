@@ -1,0 +1,11 @@
+{
+  "Group": "Misc",
+  "FriendlyName": "Transactional outbox relay",
+  "SystemName": "Misc.OutboxRelay",
+  "Version": "1.00.0",
+  "SupportedVersions": ["5.00"],
+  "Author": "Northstar Living Group",
+  "DisplayOrder": 1,
+  "FileName": "Nop.Plugin.Misc.OutboxRelay.dll",
+  "Description": "Transactional outbox pattern: captures OrderPlaced events and relays them to RabbitMQ exchange northstar.events (ADR-003)"
+}

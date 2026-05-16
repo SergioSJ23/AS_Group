@@ -134,6 +134,23 @@ services:
       retries: 10
       start_period: 60s
 
+  # ── EspoCRM consumer (ADR-003: relay → CRM) ──────────────────────────────
+  espocrm_consumer:
+    build:
+      context: ./src/Workers/EspoCrmConsumer
+      dockerfile: Dockerfile
+    environment:
+      RABBITMQ_URI: amqp://northstar:northstar@rabbitmq:5672/
+      ESPOCRM_URL: http://espocrm:80/
+      ESPOCRM_USER: admin
+      ESPOCRM_PASS: admin
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      espocrm:
+        condition: service_started
+    restart: on-failure
+
   # ── ERP stub for BU1 (ADR-004) ────────────────────────────────────────────
   # TODO Phase 4: replace `image:` with `build: ./src/Workers/ErpStub` once stub exists.
   erp_bu1:
