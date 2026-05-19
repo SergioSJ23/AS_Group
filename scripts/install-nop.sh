@@ -14,17 +14,37 @@
 
 set -euo pipefail
 
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin123}"
+
+echo "==> Pre-flight checks"
+for c in northstar-db_bu1-1 northstar-db_bu2-1 northstar-nop_bu1-1 northstar-nop_bu2-1; do
+    if ! docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null | grep -q true; then
+        echo "FAIL: container '${c}' is not running. Run 'docker compose up -d' first, wait ~30s, then re-run this script."
+        exit 1
+    fi
+done
+echo "    all required containers running"
 
 # Detect admin email per-BU from the database (first non-system account).
+# On a fresh install (no DB tables yet) this returns empty; the caller falls back to a default.
+# Always returns 0 so set -e + pipefail don't kill the script before fallback runs.
 detect_admin_email () {
     local db_container="$1" db_name="$2"
-    docker exec "$db_container" psql -U nop -d "$db_name" -tAc \
-        "SELECT \"Email\" FROM \"Customer\" WHERE \"IsSystemAccount\" = false AND \"Email\" IS NOT NULL ORDER BY \"Id\" LIMIT 1;" 2>/dev/null | tr -d '[:space:]'
+    local out
+    out=$(docker exec "$db_container" psql -U nop -d "$db_name" -tAc \
+        "SELECT \"Email\" FROM \"Customer\" WHERE \"IsSystemAccount\" = false AND \"Email\" IS NOT NULL ORDER BY \"Id\" LIMIT 1;" 2>/dev/null || true)
+    printf '%s' "$out" | tr -d '[:space:]'
+    return 0
 }
 
-ADMIN_EMAIL_BU1=$(detect_admin_email "northstar-db_bu1-1" "nop_bu1")
-ADMIN_EMAIL_BU2=$(detect_admin_email "northstar-db_bu2-1" "nop_bu2")
+ADMIN_EMAIL_BU1="${ADMIN_EMAIL_BU1:-$(detect_admin_email "northstar-db_bu1-1" "nop_bu1")}"
+ADMIN_EMAIL_BU1="${ADMIN_EMAIL_BU1:-admin@bu1.northstar.local}"
+ADMIN_EMAIL_BU2="${ADMIN_EMAIL_BU2:-$(detect_admin_email "northstar-db_bu2-1" "nop_bu2")}"
+ADMIN_EMAIL_BU2="${ADMIN_EMAIL_BU2:-admin@bu2.northstar.local}"
+
+bu_email () {
+    if [ "$1" = "bu1" ]; then echo "$ADMIN_EMAIL_BU1"; else echo "$ADMIN_EMAIL_BU2"; fi
+}
 echo "Detected admin emails: BU1=${ADMIN_EMAIL_BU1}  BU2=${ADMIN_EMAIL_BU2}"
 
 install_bu () {
@@ -152,10 +172,6 @@ extract_token () {
     grep -oE 'name="__RequestVerificationToken"[^>]*value="[^"]+"' "$1" \
         | head -1 \
         | sed -E 's/.*value="([^"]+)".*/\1/'
-}
-
-bu_email () {
-    if [ "$1" = "bu1" ]; then echo "$ADMIN_EMAIL_BU1"; else echo "$ADMIN_EMAIL_BU2"; fi
 }
 
 admin_login () {
@@ -339,11 +355,57 @@ activate_erp_widget () {
     esac
 }
 
+# Search.Meilisearch self-activates as both ISearchProvider and IWidgetPlugin inside its
+# own InstallAsync (CatalogSettings.ActiveSearchProviderSystemName + WidgetSettings), so
+# the shell side only has to drive plugin install + apply-changes.
+install_meilisearch_plugin () {
+    local bu="$1" host_port="$2"
+    local base="http://localhost:${host_port}"
+    local cookies
+    cookies=$(mktemp)
+    trap 'rm -f "$cookies"' RETURN
+
+    echo "==> ${bu}: enabling Search.Meilisearch plugin"
+    admin_login "$bu" "$host_port" "$cookies" "$(bu_email "$bu")" || return 1
+
+    if curl -sS -b "$cookies" -c "$cookies" "${base}/Admin/Plugin/List" \
+            | grep -q 'uninstall-plugin-link-Search.Meilisearch'; then
+        echo "    plugin already installed — skipping install step"
+        return 0
+    fi
+
+    local html token code
+    html=$(mktemp)
+    curl -sS -b "$cookies" -c "$cookies" -o "$html" "${base}/Admin/Plugin/List"
+    token=$(extract_token "$html")
+    rm -f "$html"
+    [ -n "$token" ] || { echo "FAIL: no token on ${bu} Plugin/List"; return 1; }
+
+    echo "    prepare install"
+    code=$(curl -sS -o /dev/null -w '%{http_code}' \
+        -b "$cookies" -c "$cookies" \
+        -X POST "${base}/Admin/Plugin/List" \
+        --data-urlencode "__RequestVerificationToken=${token}" \
+        --data-urlencode "install-plugin-link-Search.Meilisearch=1")
+    case "$code" in
+        200|302) ;;
+        *) echo "FAIL: ${bu} install POST returned HTTP ${code}"; return 1 ;;
+    esac
+
+    echo "    apply changes (triggers in-process restart + bulk index)"
+    curl -sS -o /dev/null -b "$cookies" -c "$cookies" \
+        -X POST "${base}/Admin/Plugin/List" \
+        --data-urlencode "__RequestVerificationToken=${token}" \
+        --data-urlencode "plugin-apply-changes=1" || true
+}
+
 # Phase A: prepare + apply install for all plugins on both BUs.
 install_keycloak_plugin bu1 8081
 install_keycloak_plugin bu2 8082
 install_erp_plugin bu1 8081
 install_erp_plugin bu2 8082
+install_meilisearch_plugin bu1 8081
+install_meilisearch_plugin bu2 8082
 
 # Phase B: apply-changes triggers an in-process restart; force a clean container
 # restart and wait for both storefronts before proceeding with activation.
@@ -367,7 +429,8 @@ activate_erp_widget bu2 8082
 
 echo
 echo "nopCommerce installed for BU1 and BU2."
-echo "  SSO:          Keycloak (ExternalAuth.Keycloak) active"
-echo "  ERP widget:   Misc.ErpIntegration active (circuit breaker + stock banner)"
+echo "  SSO:           Keycloak (ExternalAuth.Keycloak) active"
+echo "  ERP widget:    Misc.ErpIntegration active (circuit breaker + stock banner)"
+echo "  Search:        Search.Meilisearch active (federated index + DB fallback)"
 echo "Admin logins: BU1: ${ADMIN_EMAIL_BU1} / ${ADMIN_PASSWORD}  |  BU2: ${ADMIN_EMAIL_BU2} / ${ADMIN_PASSWORD}"
-echo "Try: ./scripts/test-sso.sh  |  ./scripts/test-erp-failure.sh"
+echo "Try: ./scripts/test-sso.sh  |  ./scripts/test-erp-failure.sh  |  ./scripts/test-search.sh"

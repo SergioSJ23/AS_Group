@@ -927,8 +927,12 @@ public partial class ProductService : IProductService
                 }
             }
 
+            // ADR-005: skip the Union-chain blocks below when an external search provider supplied results.
+            // The provider owns full-text discovery (it can index name, description, SKU, etc.).
+            // Mixing provider results (in-memory IEnumerable) with linq2db Table queries inside Unions
+            // produces an expression tree linq2db cannot translate.
             //search by SKU for ProductAttributeCombination
-            if (searchSku)
+            if (searchSku && runStandardSearch)
             {
                 productsByKeywords = productsByKeywords.Union(
                     from pac in _productAttributeCombinationRepository.Table
@@ -937,7 +941,7 @@ public partial class ProductService : IProductService
             }
 
             //search by category name if admin allows
-            if (_catalogSettings.AllowCustomersToSearchWithCategoryName)
+            if (_catalogSettings.AllowCustomersToSearchWithCategoryName && runStandardSearch)
             {
                 var categoryQuery = _categoryRepository.Table;
 
@@ -973,7 +977,7 @@ public partial class ProductService : IProductService
             }
 
             //search by manufacturer name if admin allows
-            if (_catalogSettings.AllowCustomersToSearchWithManufacturerName)
+            if (_catalogSettings.AllowCustomersToSearchWithManufacturerName && runStandardSearch)
             {
                 var manufacturerQuery = _manufacturerRepository.Table;
 
@@ -1008,7 +1012,7 @@ public partial class ProductService : IProductService
                 }
             }
 
-            if (searchProductTags)
+            if (searchProductTags && runStandardSearch)
             {
                 productsByKeywords = productsByKeywords.Union(
                     from pptm in _productTagMappingRepository.Table
@@ -1030,9 +1034,14 @@ public partial class ProductService : IProductService
                 }
             }
 
+            // ADR-005 workaround: when a search provider supplies productsByKeywords as an
+            // in-memory EnumerableQuery<int>, the original `join` here fails to compile under
+            // linq2db with an IEnumerable<>/IQueryable<> type mismatch. Materializing to a
+            // List<int> and using Contains lets linq2db translate to a single SQL `WHERE Id IN (...)`.
+            var keywordProductIds = productsByKeywords.Distinct().ToList();
             productsQuery =
                 from p in productsQuery
-                join pbk in productsByKeywords on p.Id equals pbk
+                where keywordProductIds.Contains(p.Id)
                 select p;
         }
 
@@ -1122,14 +1131,19 @@ public partial class ProductService : IProductService
 
         if (providerResults.Any() && orderBy == ProductSortingEnum.Position && !showHidden)
         {
-            var sortedProducts = from p in productsQuery
-                                 join pr in providerResults.Select((id, ind) => new { ind, id }) on p.Id equals pr.id into orderSeq
-                                 from os in orderSeq.DefaultIfEmpty()
-                                 orderby os == null ? int.MaxValue : os.ind
-                                 select p;
-                                 
+            // ADR-005 workaround: the original group-join between productsQuery (linq2db) and the
+            // in-memory ranking sequence cannot be translated by linq2db. Materialize the matched
+            // products first, then sort in memory by the provider-supplied rank.
+            var rank = new Dictionary<int, int>(providerResults.Count);
+            for (var i = 0; i < providerResults.Count; i++)
+                rank[providerResults[i]] = i;
 
-            return await sortedProducts.ToPagedListAsync(pageIndex, pageSize);
+            var matched = await productsQuery.ToListAsync();
+            var sorted = matched
+                .OrderBy(p => rank.TryGetValue(p.Id, out var idx) ? idx : int.MaxValue)
+                .ToList();
+
+            return new PagedList<Product>(sorted, pageIndex, pageSize);
         }
 
         return await productsQuery.OrderBy(_localizedPropertyRepository, await _workContext.GetWorkingLanguageAsync(), orderBy).ToPagedListAsync(pageIndex, pageSize);

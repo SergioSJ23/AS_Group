@@ -1,0 +1,11 @@
+{
+  "Group": "Search providers",
+  "FriendlyName": "Meilisearch federated search (ADR-005)",
+  "SystemName": "Search.Meilisearch",
+  "Version": "1.0.0",
+  "SupportedVersions": ["5.00"],
+  "Author": "Northstar Living Group",
+  "DisplayOrder": 1,
+  "FileName": "Nop.Plugin.Search.Meilisearch.dll",
+  "Description": "Federated product search via Meilisearch. Each BU indexes its products into a shared index, filtered at query time by buId. Falls back to nopCommerce DB search if Meilisearch is unreachable."
+}
