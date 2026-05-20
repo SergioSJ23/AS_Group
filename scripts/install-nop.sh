@@ -192,31 +192,15 @@ for port in 8081 8082; do
 done
 
 # ── Per-BU configuration ──────────────────────────────────────────────────
-# Sets the store name and the active theme for a BU via direct DB writes.
-# Theme change requires a process restart to take effect (handled by the
-# restart that follows the wait_for_storefront loop above).
+# Sets the store name for a BU via a direct DB write.
 configure_bu () {
-    local bu="$1" store_name="$2" theme="$3"
+    local bu="$1" store_name="$2"
     local db_container="northstar-db_${bu}-1"
     local db_name="nop_${bu}"
 
-    echo "==> ${bu}: configuring store name '${store_name}' + theme '${theme}'"
+    echo "==> ${bu}: configuring store name '${store_name}'"
     docker exec "$db_container" psql -U nop -d "$db_name" -c \
         "UPDATE \"Store\" SET \"Name\" = '${store_name}' WHERE \"Id\" = 1;" >/dev/null
-
-    # Upsert the theme setting: UPDATE if the row already exists (nopCommerce creates it
-    # during install as 'DefaultClean'), INSERT if for some reason it is absent.
-    docker exec "$db_container" psql -U nop -d "$db_name" -c "
-DO \$\$
-BEGIN
-    UPDATE \"Setting\" SET \"Value\" = '${theme}'
-    WHERE LOWER(\"Name\") = 'storeinformationsettings.defaultstoretheme';
-    IF NOT FOUND THEN
-        INSERT INTO \"Setting\" (\"Name\", \"Value\", \"StoreId\")
-        VALUES ('storeinformationsettings.defaultstoretheme', '${theme}', 0);
-    END IF;
-END \$\$;
-" >/dev/null
     echo "    done"
 }
 
@@ -443,10 +427,25 @@ install_meilisearch_plugin () {
     echo "==> ${bu}: enabling Search.Meilisearch plugin"
     admin_login "$bu" "$host_port" "$cookies" "$(bu_email "$bu")" || return 1
 
-    if curl -sS -b "$cookies" -c "$cookies" "${base}/Admin/Plugin/List" \
-            | grep -q 'uninstall-plugin-link-Search.Meilisearch'; then
-        echo "    plugin already installed — skipping install step"
-        return 0
+    # If already installed, uninstall first so InstallAsync (+ BulkIndexAsync) runs again.
+    # This ensures pictureUrl and other new fields are always re-indexed after a rebuild.
+    local plugin_page
+    plugin_page=$(curl -sS -b "$cookies" -c "$cookies" "${base}/Admin/Plugin/List")
+    if printf '%s' "$plugin_page" | grep -q 'uninstall-plugin-link-Search.Meilisearch'; then
+        echo "    already installed — uninstalling first to force re-index…"
+        local html token
+        html=$(mktemp)
+        curl -sS -b "$cookies" -c "$cookies" -o "$html" "${base}/Admin/Plugin/List"
+        token=$(extract_token "$html"); rm -f "$html"
+        curl -sS -o /dev/null -b "$cookies" -c "$cookies" \
+            -X POST "${base}/Admin/Plugin/List" \
+            --data-urlencode "__RequestVerificationToken=${token}" \
+            --data-urlencode "uninstall-plugin-link-Search.Meilisearch=1" || true
+        curl -sS -o /dev/null -b "$cookies" -c "$cookies" \
+            -X POST "${base}/Admin/Plugin/List" \
+            --data-urlencode "__RequestVerificationToken=${token}" \
+            --data-urlencode "plugin-apply-changes=1" || true
+        sleep 5
     fi
 
     local html token code
@@ -475,8 +474,8 @@ install_meilisearch_plugin () {
 }
 
 # ── Per-BU theme + store name ─────────────────────────────────────────────
-configure_bu bu1 "HomeStyle — Northstar Living"    "HomeStyle"
-configure_bu bu2 "WorkSpace — Northstar Professionals" "WorkSpace"
+configure_bu bu1 "HomeStyle — Northstar Living"
+configure_bu bu2 "WorkSpace — Northstar Professionals"
 
 # ── Seed products (must happen before Meilisearch plugin install) ─────────
 seed_bu_products bu1

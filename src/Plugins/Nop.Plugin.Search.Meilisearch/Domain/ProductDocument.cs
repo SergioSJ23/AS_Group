@@ -32,5 +32,8 @@ public class ProductDocument
     [JsonPropertyName("price")]
     public decimal Price { get; set; }
 
+    [JsonPropertyName("pictureUrl")]
+    public string PictureUrl { get; set; } = string.Empty;
+
     public static string BuildId(string buId, int productId) => $"{buId}-{productId}";
 }

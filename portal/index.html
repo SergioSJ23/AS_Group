@@ -129,14 +129,28 @@
     .card-top.ws { background: linear-gradient(90deg, #1a7a8a, #2aa0b4); }
 
     .card-thumb {
-      height: 140px;
+      height: 160px;
+      overflow: hidden;
+      position: relative;
+    }
+    .card-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform .3s ease;
+    }
+    .product-card:hover .card-thumb img { transform: scale(1.04); }
+    .card-thumb .thumb-fallback {
+      width: 100%;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 3.5rem;
     }
-    .card-thumb.hs { background: #fdf2ea; }
-    .card-thumb.ws { background: #e8f6f9; }
+    .card-thumb .thumb-fallback.hs { background: #fdf2ea; }
+    .card-thumb .thumb-fallback.ws { background: #e8f6f9; }
 
     .card-body {
       padding: 16px 18px;
@@ -376,10 +390,16 @@
       const url = productUrl(p.buId, p.slug);
       const emoji = p.emoji || bu.emoji;
       const price = p.price != null ? formatPrice(p.price) : '';
+      const imgSrc = p.pictureUrl || p.imageUrl || '';
+      const thumb = imgSrc
+        ? `<img src="${imgSrc}" alt="${p.name}" onerror="this.outerHTML='<div class=\\"thumb-fallback ${bu.cls}\\">${emoji}</div>'">`
+        : `<div class="thumb-fallback ${bu.cls}">${emoji}</div>`;
       return `
         <div class="product-card">
           <div class="card-top ${bu.cls}"></div>
-          <div class="card-thumb ${bu.cls}">${emoji}</div>
+          <div class="card-thumb">
+            ${thumb}
+          </div>
           <div class="card-body">
             <span class="bu-badge ${bu.cls}">${bu.label}</span>
             <div class="card-name">${p.name}</div>

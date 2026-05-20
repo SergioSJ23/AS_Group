@@ -7,6 +7,7 @@ using Nop.Core.Domain.Seo;
 using Nop.Core.Infrastructure;
 using Nop.Data;
 using Nop.Plugin.Search.Meilisearch.Services;
+using Nop.Services.Media;
 
 namespace Nop.Plugin.Search.Meilisearch.Infrastructure;
 
@@ -42,6 +43,8 @@ public class PluginNopStartup : INopStartup
             sp.GetRequiredService<IMeilisearchClient>(),
             sp.GetRequiredService<IRepository<Product>>(),
             sp.GetRequiredService<IRepository<UrlRecord>>(),
+            sp.GetRequiredService<IRepository<ProductPicture>>(),
+            sp.GetRequiredService<IPictureService>(),
             buId,
             sp.GetRequiredService<ILogger<MeilisearchIndexer>>()));
 
