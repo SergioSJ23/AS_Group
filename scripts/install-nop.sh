@@ -15,7 +15,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin123}"
+# Must satisfy nopCommerce's default policy: ≥6 chars, upper, lower, digit, symbol.
+# Override: ADMIN_PASSWORD=YourPass ./scripts/install-nop.sh
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-Admin123!}"
 
 echo "==> Pre-flight checks"
 for c in northstar-db_bu1-1 northstar-db_bu2-1 northstar-nop_bu1-1 northstar-nop_bu2-1; do
@@ -25,6 +27,30 @@ for c in northstar-db_bu1-1 northstar-db_bu2-1 northstar-nop_bu1-1 northstar-nop
     fi
 done
 echo "    all required containers running"
+
+# Waits until a nopCommerce port responds with any HTTP status code (including 302
+# to /install). "Connection reset by peer" happens while Kestrel is still initialising;
+# we retry every 3 s for up to 3 minutes.
+wait_for_http () {
+    local port="$1" label="$2"
+    echo "==> Waiting for :${port} (${label}) to accept HTTP…"
+    for _ in $(seq 1 60); do
+        local code
+        code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            --connect-timeout 3 --max-time 5 \
+            "http://localhost:${port}/" 2>/dev/null || true)
+        if [ -n "$code" ] && [ "$code" != "000" ]; then
+            echo "    :${port} ready (HTTP ${code})"
+            return 0
+        fi
+        sleep 3
+    done
+    echo "FAIL: :${port} did not respond after 3 min — is the container healthy?"
+    exit 1
+}
+
+wait_for_http 8081 nop_bu1
+wait_for_http 8082 nop_bu2
 
 # Detect admin email per-BU from the database (first non-system account).
 # On a fresh install (no DB tables yet) this returns empty; the caller falls back to a default.
@@ -177,8 +203,20 @@ configure_bu () {
     echo "==> ${bu}: configuring store name '${store_name}' + theme '${theme}'"
     docker exec "$db_container" psql -U nop -d "$db_name" -c \
         "UPDATE \"Store\" SET \"Name\" = '${store_name}' WHERE \"Id\" = 1;" >/dev/null
-    docker exec "$db_container" psql -U nop -d "$db_name" -c \
-        "UPDATE \"Setting\" SET \"Value\" = '${theme}' WHERE LOWER(\"Name\") = 'storeinformationsettings.defaultstoretheme';" >/dev/null
+
+    # Upsert the theme setting: UPDATE if the row already exists (nopCommerce creates it
+    # during install as 'DefaultClean'), INSERT if for some reason it is absent.
+    docker exec "$db_container" psql -U nop -d "$db_name" -c "
+DO \$\$
+BEGIN
+    UPDATE \"Setting\" SET \"Value\" = '${theme}'
+    WHERE LOWER(\"Name\") = 'storeinformationsettings.defaultstoretheme';
+    IF NOT FOUND THEN
+        INSERT INTO \"Setting\" (\"Name\", \"Value\", \"StoreId\")
+        VALUES ('storeinformationsettings.defaultstoretheme', '${theme}', 0);
+    END IF;
+END \$\$;
+" >/dev/null
     echo "    done"
 }
 
@@ -229,7 +267,13 @@ admin_login () {
         --data-urlencode "RememberMe=false")
     case "$code" in
         302) ;;
-        *) echo "FAIL: ${bu} login POST returned HTTP ${code} (email=${email})"; return 1 ;;
+        *)
+            echo "FAIL: ${bu} login POST returned HTTP ${code} (email=${email})"
+            echo "      The admin password does not match ADMIN_PASSWORD='${ADMIN_PASSWORD}'."
+            echo "      Fix: ADMIN_PASSWORD=<your-password> ./scripts/install-nop.sh"
+            echo "      Or seed Meilisearch directly: ./scripts/seed-meilisearch.sh"
+            return 1
+            ;;
     esac
 }
 

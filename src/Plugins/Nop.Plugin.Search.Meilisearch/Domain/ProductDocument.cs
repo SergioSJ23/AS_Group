@@ -26,5 +26,11 @@ public class ProductDocument
     [JsonPropertyName("sku")]
     public string Sku { get; set; } = string.Empty;
 
+    [JsonPropertyName("slug")]
+    public string Slug { get; set; } = string.Empty;
+
+    [JsonPropertyName("price")]
+    public decimal Price { get; set; }
+
     public static string BuildId(string buId, int productId) => $"{buId}-{productId}";
 }

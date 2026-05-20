@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Nop.Core.Domain.Catalog;
+using Nop.Core.Domain.Seo;
 using Nop.Core.Infrastructure;
 using Nop.Data;
 using Nop.Plugin.Search.Meilisearch.Services;
@@ -40,6 +41,7 @@ public class PluginNopStartup : INopStartup
         services.AddScoped<IMeilisearchIndexer>(sp => new MeilisearchIndexer(
             sp.GetRequiredService<IMeilisearchClient>(),
             sp.GetRequiredService<IRepository<Product>>(),
+            sp.GetRequiredService<IRepository<UrlRecord>>(),
             buId,
             sp.GetRequiredService<ILogger<MeilisearchIndexer>>()));
 

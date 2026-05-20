@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Northstar Living Group — Group Portal</title>
+  <title>Northstar Living Group — Shop</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -18,150 +18,272 @@
     header {
       background: #16213e;
       color: #fff;
-      padding: 48px 24px 40px;
+      padding: 36px 24px 28px;
       text-align: center;
       border-bottom: 4px solid #1a7a8a;
     }
     header .group-name {
-      font-size: 2.2rem;
+      font-size: 2rem;
       font-weight: 300;
       letter-spacing: 2px;
       text-transform: uppercase;
     }
     header .group-name span { color: #c47c5a; font-weight: 600; }
     header p {
-      margin-top: 10px;
-      font-size: 0.95rem;
+      margin-top: 8px;
+      font-size: 0.88rem;
       color: #8892a4;
       letter-spacing: 0.5px;
+    }
+
+    /* ── BU quick-access bar ── */
+    .bu-bar {
+      background: #fff;
+      border-bottom: 1px solid #e8eaf0;
+      display: flex;
+      justify-content: center;
+      gap: 0;
+    }
+    .bu-bar a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 32px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-decoration: none;
+      color: #555;
+      border-bottom: 3px solid transparent;
+      transition: color .15s, border-color .15s;
+    }
+    .bu-bar a.hs:hover  { color: #c47c5a; border-color: #c47c5a; }
+    .bu-bar a.ws:hover  { color: #1a7a8a; border-color: #1a7a8a; }
+    .bu-bar .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .bu-bar .dot.hs { background: #c47c5a; }
+    .bu-bar .dot.ws { background: #1a7a8a; }
+    .bu-bar .sep {
+      width: 1px;
+      background: #e8eaf0;
+      margin: 10px 0;
     }
 
     /* ── Main layout ── */
     main {
-      max-width: 960px;
-      margin: 56px auto;
+      max-width: 1100px;
+      margin: 40px auto;
       padding: 0 24px;
     }
 
+    /* ── Section label ── */
     .section-label {
-      text-align: center;
-      font-size: 0.72rem;
+      font-size: 0.68rem;
       font-weight: 700;
       letter-spacing: 3px;
       text-transform: uppercase;
       color: #9aa0ab;
-      margin-bottom: 28px;
+      margin-bottom: 22px;
     }
 
-    /* ── BU cards ── */
-    .brands {
+    /* ── Status banner ── */
+    #status-banner {
+      background: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffc107;
+      border-radius: 6px;
+      padding: 10px 16px;
+      font-size: 0.82rem;
+      margin-bottom: 24px;
+      display: none;
+    }
+
+    /* ── Product grid ── */
+    .product-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 28px;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 22px;
       margin-bottom: 48px;
     }
 
-    .brand-card {
+    .product-card {
       background: #fff;
       border-radius: 10px;
-      padding: 40px 32px 36px;
-      box-shadow: 0 2px 16px rgba(0,0,0,.07);
-      text-align: center;
+      box-shadow: 0 2px 12px rgba(0,0,0,.07);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
       transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .product-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 28px rgba(0,0,0,.12);
+    }
+
+    .card-top {
+      height: 5px;
+    }
+    .card-top.hs { background: linear-gradient(90deg, #c47c5a, #e8a87c); }
+    .card-top.ws { background: linear-gradient(90deg, #1a7a8a, #2aa0b4); }
+
+    .card-thumb {
+      height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3.5rem;
+    }
+    .card-thumb.hs { background: #fdf2ea; }
+    .card-thumb.ws { background: #e8f6f9; }
+
+    .card-body {
+      padding: 16px 18px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .bu-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 20px;
+      margin-bottom: 10px;
+    }
+    .bu-badge.hs { background: #fde8d8; color: #9a5839; }
+    .bu-badge.ws { background: #d0edf3; color: #115e6b; }
+
+    .card-name {
+      font-size: 0.98rem;
+      font-weight: 700;
+      color: #222;
+      margin-bottom: 6px;
+      line-height: 1.3;
+    }
+
+    .card-desc {
+      font-size: 0.8rem;
+      color: #777;
+      line-height: 1.5;
+      flex: 1;
+      margin-bottom: 14px;
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .card-price {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #222;
+    }
+
+    .card-btn {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 5px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-decoration: none;
+      letter-spacing: 0.3px;
+      transition: opacity .15s;
+      white-space: nowrap;
+    }
+    .card-btn:hover { opacity: .82; }
+    .card-btn.hs { background: #c47c5a; color: #fff; }
+    .card-btn.ws { background: #1a7a8a; color: #fff; }
+
+    /* ── Stores section ── */
+    .stores {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+      margin-bottom: 40px;
+    }
+    .store-card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 28px 24px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.07);
+      text-align: center;
       position: relative;
       overflow: hidden;
     }
-    .brand-card::before {
+    .store-card::before {
       content: "";
       position: absolute;
       top: 0; left: 0; right: 0;
-      height: 5px;
+      height: 4px;
     }
-    .brand-card.homestyle::before { background: linear-gradient(90deg,#c47c5a,#e8a87c); }
-    .brand-card.workspace::before { background: linear-gradient(90deg,#1a7a8a,#2aa0b4); }
-    .brand-card:hover { transform: translateY(-5px); box-shadow: 0 10px 32px rgba(0,0,0,.12); }
-
-    .brand-icon {
-      width: 72px; height: 72px;
-      border-radius: 50%;
-      margin: 0 auto 20px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 2rem;
-    }
-    .brand-card.homestyle .brand-icon { background: #fde8d8; }
-    .brand-card.workspace .brand-icon { background: #d0edf3; }
-
-    .brand-card h2 { font-size: 1.7rem; font-weight: 700; margin-bottom: 6px; }
-    .brand-card.homestyle h2 { color: #c47c5a; }
-    .brand-card.workspace h2 { color: #1a7a8a; }
-
-    .brand-card .tagline { color: #777; font-size: 0.9rem; margin-bottom: 4px; }
-    .brand-card .port    { font-size: 0.75rem; color: #b0b8c4; font-family: monospace; margin-bottom: 24px; }
-
-    .visit-btn {
+    .store-card.hs::before { background: linear-gradient(90deg,#c47c5a,#e8a87c); }
+    .store-card.ws::before { background: linear-gradient(90deg,#1a7a8a,#2aa0b4); }
+    .store-card .icon { font-size: 2.2rem; margin-bottom: 10px; display: block; }
+    .store-card h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 4px; }
+    .store-card.hs h3 { color: #c47c5a; }
+    .store-card.ws h3 { color: #1a7a8a; }
+    .store-card p { font-size: 0.82rem; color: #888; margin-bottom: 16px; }
+    .store-btn {
       display: inline-block;
-      padding: 12px 30px;
+      padding: 10px 24px;
       border-radius: 5px;
-      font-size: 0.88rem;
+      font-size: 0.82rem;
       font-weight: 700;
       text-decoration: none;
-      letter-spacing: 0.5px;
       transition: opacity .15s;
     }
-    .visit-btn:hover { opacity: .85; }
-    .brand-card.homestyle .visit-btn { background: #c47c5a; color: #fff; }
-    .brand-card.workspace .visit-btn { background: #1a7a8a; color: #fff; }
+    .store-btn:hover { opacity: .85; }
+    .store-card.hs .store-btn { background: #c47c5a; color: #fff; }
+    .store-card.ws .store-btn { background: #1a7a8a; color: #fff; }
 
-    /* ── Shared infra panel ── */
+    /* ── Infra panel ── */
     .infra-panel {
       background: #fff;
       border-radius: 10px;
-      padding: 32px 28px;
-      box-shadow: 0 2px 16px rgba(0,0,0,.07);
-      margin-bottom: 48px;
+      padding: 24px 22px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.07);
+      margin-bottom: 40px;
     }
     .infra-panel h3 {
       text-align: center;
-      font-size: 0.72rem;
+      font-size: 0.68rem;
       font-weight: 700;
       letter-spacing: 3px;
       text-transform: uppercase;
       color: #9aa0ab;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
-    .chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
     .chip {
       border-radius: 20px;
-      padding: 7px 15px;
-      font-size: 0.8rem;
+      padding: 6px 13px;
+      font-size: 0.76rem;
       font-weight: 500;
-      display: flex; align-items: center; gap: 6px;
+      display: flex; align-items: center; gap: 5px;
     }
     .chip.shared { background: #eaf6ee; color: #2d7a4a; }
     .chip.local  { background: #fff3e0; color: #b56e00; }
 
-    /* ── Scenario note ── */
-    .scenario-note {
-      background: #16213e;
-      color: #8892a4;
-      border-radius: 10px;
-      padding: 24px 28px;
-      font-size: 0.82rem;
-      line-height: 1.7;
-    }
-    .scenario-note strong { color: #c47c5a; }
-
     footer {
       text-align: center;
-      padding: 32px 24px;
+      padding: 28px 24px;
       color: #b0b8c4;
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       letter-spacing: 0.5px;
     }
 
-    @media (max-width: 600px) {
-      .brands { grid-template-columns: 1fr; }
-      header .group-name { font-size: 1.6rem; }
+    @media (max-width: 640px) {
+      .stores { grid-template-columns: 1fr; }
+      .bu-bar a { padding: 12px 16px; }
+      header .group-name { font-size: 1.5rem; }
     }
   </style>
 </head>
@@ -169,28 +291,38 @@
 
   <header>
     <div class="group-name">Northstar <span>Living</span> Group</div>
-    <p>Federated commerce platform &mdash; one identity, two autonomous business units</p>
+    <p>Federated commerce &mdash; one identity, two autonomous brands</p>
   </header>
+
+  <nav class="bu-bar">
+    <a href="http://localhost:8081" class="hs">
+      <span class="dot hs"></span>HomeStyle — Home &amp; Decor
+    </a>
+    <div class="sep"></div>
+    <a href="http://localhost:8082" class="ws">
+      <span class="dot ws"></span>WorkSpace — Office &amp; Tech
+    </a>
+  </nav>
 
   <main>
 
-    <p class="section-label">Business Units</p>
+    <p class="section-label">All Products</p>
+    <div id="status-banner"></div>
+    <div class="product-grid" id="product-grid"></div>
 
-    <div class="brands">
-      <div class="brand-card homestyle">
-        <div class="brand-icon">🏠</div>
-        <h2>HomeStyle</h2>
-        <p class="tagline">Premium home furnishings &amp; decor</p>
-        <p class="port">localhost:8081</p>
-        <a href="http://localhost:8081" class="visit-btn">Visit Store &rarr;</a>
+    <p class="section-label">Our Stores</p>
+    <div class="stores">
+      <div class="store-card hs">
+        <span class="icon">🏠</span>
+        <h3>HomeStyle</h3>
+        <p>Premium home furnishings &amp; decor — warm, handcrafted, timeless.</p>
+        <a href="http://localhost:8081" class="store-btn">Visit HomeStyle &rarr;</a>
       </div>
-
-      <div class="brand-card workspace">
-        <div class="brand-icon">💼</div>
-        <h2>WorkSpace</h2>
-        <p class="tagline">Professional office solutions &amp; tech</p>
-        <p class="port">localhost:8082</p>
-        <a href="http://localhost:8082" class="visit-btn">Visit Store &rarr;</a>
+      <div class="store-card ws">
+        <span class="icon">💼</span>
+        <h3>WorkSpace</h3>
+        <p>Professional office solutions &amp; tech — ergonomic, precise, productive.</p>
+        <a href="http://localhost:8082" class="store-btn">Visit WorkSpace &rarr;</a>
       </div>
     </div>
 
@@ -206,19 +338,117 @@
       </div>
     </div>
 
-    <div class="scenario-note">
-      <strong>Scenario A — Federated Commerce After Acquisitions.</strong>
-      Each BU runs an isolated nopCommerce instance with its own PostgreSQL database (ADR-001).
-      SSO via Keycloak lets the same customer identity log in to either brand.
-      Orders flow asynchronously to EspoCRM through per-BU transactional outboxes.
-      The ERP circuit breaker (ADR-004) lets one BU degrade without collapsing the other.
-    </div>
-
   </main>
 
   <footer>
     Northstar Living Group &bull; Software Architecture Assignment 2 &bull; Scenario A Demo
   </footer>
+
+  <script>
+    // Fallback product catalogue (mirrors seed-bu1.sql / seed-bu2.sql).
+    // Used when Meilisearch is not yet populated (before install-nop.sh runs).
+    const FALLBACK_PRODUCTS = [
+      { buId: 'bu1', name: 'Linen Sofa',            desc: 'Handcrafted 3-seater sofa with solid oak legs.',          price: 1249, slug: 'linen-sofa',            emoji: '🛋️' },
+      { buId: 'bu1', name: 'Walnut Coffee Table',    desc: 'Solid walnut top, 120 × 60 cm.',                         price: 449,  slug: 'walnut-coffee-table',    emoji: '🪵' },
+      { buId: 'bu1', name: 'Rattan Pendant Light',   desc: 'Handwoven rattan lamp, 40 cm diameter.',                 price: 129,  slug: 'rattan-pendant-light',   emoji: '💡' },
+      { buId: 'bu1', name: 'Marble Table Lamp',      desc: 'White Carrara marble base with a linen shade.',          price: 189,  slug: 'marble-table-lamp',      emoji: '🪔' },
+      { buId: 'bu2', name: 'Ergonomic Mesh Chair',   desc: 'Full-mesh back, 4D armrests, lumbar support.',           price: 699,  slug: 'ergonomic-mesh-chair',   emoji: '🪑' },
+      { buId: 'bu2', name: 'Adjustable Standing Desk', desc: 'Electric sit-stand, 140 × 70 cm bamboo top.',         price: 849,  slug: 'adjustable-standing-desk', emoji: '🖥️' },
+      { buId: 'bu2', name: '27" Ultrawide Monitor',  desc: 'QHD IPS panel, 144 Hz, USB-C 90W PD.',                  price: 549,  slug: '27-ultrawide-monitor',   emoji: '🖥️' },
+      { buId: 'bu2', name: 'Cable Management Kit',   desc: 'Under-desk tray, 10 velcro ties, 3 cable clips.',        price: 39,   slug: 'cable-management-kit',   emoji: '🔌' },
+    ];
+
+    const BU_META = {
+      bu1: { label: 'HomeStyle', port: 8081, cls: 'hs', emoji: '🏠' },
+      bu2: { label: 'WorkSpace', port: 8082, cls: 'ws', emoji: '💼' },
+    };
+
+    function productUrl(buId, slug) {
+      return `http://localhost:${BU_META[buId].port}/${slug}`;
+    }
+
+    function formatPrice(price) {
+      return new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(price);
+    }
+
+    function renderCard(p) {
+      const bu = BU_META[p.buId] || BU_META['bu1'];
+      const url = productUrl(p.buId, p.slug);
+      const emoji = p.emoji || bu.emoji;
+      const price = p.price != null ? formatPrice(p.price) : '';
+      return `
+        <div class="product-card">
+          <div class="card-top ${bu.cls}"></div>
+          <div class="card-thumb ${bu.cls}">${emoji}</div>
+          <div class="card-body">
+            <span class="bu-badge ${bu.cls}">${bu.label}</span>
+            <div class="card-name">${p.name}</div>
+            <div class="card-desc">${p.desc || p.description || ''}</div>
+            <div class="card-footer">
+              ${price ? `<span class="card-price">${price}</span>` : '<span></span>'}
+              <a href="${url}" class="card-btn ${bu.cls}">View &rarr;</a>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function renderGrid(products) {
+      const grid = document.getElementById('product-grid');
+      grid.innerHTML = products.map(renderCard).join('');
+    }
+
+    function showBanner(msg) {
+      const b = document.getElementById('status-banner');
+      b.textContent = msg;
+      b.style.display = 'block';
+    }
+
+    async function loadFromMeilisearch() {
+      const MEILI = 'http://localhost:7700';
+      const KEY   = 'northstar-meili-master-key';
+
+      const res = await fetch(`${MEILI}/indexes/products/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${KEY}`,
+        },
+        body: JSON.stringify({ q: '', limit: 50 }),
+        signal: AbortSignal.timeout(3000),
+      });
+
+      if (!res.ok) throw new Error(`Meilisearch HTTP ${res.status}`);
+
+      const data = await res.json();
+      return (data.hits || []).map(h => ({
+        buId: h.buId,
+        name: h.name,
+        desc: h.description,
+        price: h.price,
+        slug: h.slug,
+        emoji: BU_META[h.buId]?.emoji || '📦',
+      }));
+    }
+
+    async function init() {
+      try {
+        const hits = await loadFromMeilisearch();
+        if (hits.length === 0) {
+          // Index exists but is empty — plugins not yet installed
+          renderGrid(FALLBACK_PRODUCTS);
+          showBanner('Meilisearch index is empty — run scripts/install-nop.sh to seed products. Showing catalogue preview.');
+        } else {
+          renderGrid(hits);
+        }
+      } catch {
+        // Meilisearch unreachable or not started yet
+        renderGrid(FALLBACK_PRODUCTS);
+        showBanner('Meilisearch not available — showing catalogue preview. Products will be live after install-nop.sh runs.');
+      }
+    }
+
+    init();
+  </script>
 
 </body>
 </html>
