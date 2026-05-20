@@ -17,7 +17,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Must satisfy nopCommerce's default policy: ≥6 chars, upper, lower, digit, symbol.
 # Override: ADMIN_PASSWORD=YourPass ./scripts/install-nop.sh
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-Admin123!}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
 
 echo "==> Pre-flight checks"
 for c in northstar-db_bu1-1 northstar-db_bu2-1 northstar-nop_bu1-1 northstar-nop_bu2-1; do
