@@ -1,80 +1,140 @@
-﻿﻿nopCommerce: free and open-source eCommerce solution
-===========
+# Northstar - Federated nopCommerce (Group Assignment)
 
-[nopCommerce](https://www.nopcommerce.com/?utm_source=github&utm_medium=content&utm_campaign=homepage) is the best open-source eCommerce platform. nopCommerce is free, and it is the most popular ASP.NET Core shopping cart.
+This repository contains the team's implementation for the **Group Assignment** of the Software Architecture course: an architectural evolution of nopCommerce from a single-tenant monolith into a federated, multi-Business-Unit commerce platform.
 
-![nopCommerce demo](https://www.nopcommerce.com/images/github/responsive_devices_codeplex.png#v1)
+The vendor's original project README is preserved in [`README.Original.md`](README.Original.md).
 
-### Key features ###
+---
 
-* The product is being developed and supported by the professional team since 2008.
-* nopCommerce has been downloaded more than 3,000,000 times.
-* The active developer community has more than 250,000 members.
-* nopCommerce runs on .NET 9 with an MS SQL 2012 (or higher) backend database.
-* nopCommerce is cross-platform, and you can run it on Windows, Linux, or Mac.
-* nopCommerce supports Docker out of the box, so you can easily run nopCommerce on a Linux machine.
-* nopCommerce supports PostgreSQL and MySQL databases.
-* nopCommerce fully supports web farms. You can read more about it [here](https://docs.nopcommerce.com/en/developer/tutorials/web-farms.html?utm_source=github&utm_medium=referral&utm_campaign=documentation&utm_content=text).  
-* All methods in nopCommerce are async.
-* nopCommerce supports multi-factor authentication out of the box.
-* Start our [online course for developers](https://nopcommerce.com/training?utm_source=github&utm_medium=referral&utm_campaign=course&utm_content=text) and get the practical and technical skills you need to run and customize nopCommerce websites.
+## 1. What was implemented
 
-![Logo](https://www.nopcommerce.com/images/github/logos.png#v2)
+Five Architectural Decision Records (ADR-001 to ADR-005) plus a transactional outbox / CRM integration. Each ADR is realised by concrete code, a docker-compose service, and a smoke-test script under `scripts/`.
 
-nopCommerce architecture follows well-known software patterns and the best security practices. The source code is fully customizable. Pluggable and clear architecture makes it easy to develop custom functionality and follow any business requirements.
+| ADR | Concern | Mechanism | Smoke test |
+|---|---|---|---|
+| ADR-001 | Per-BU process and data isolation | Two `nop_bu1` / `nop_bu2` containers + two PostgreSQL databases (`db_bu1`, `db_bu2`) with no shared connection | `scripts/test-isolation.sh` |
+| ADR-002 | Group-wide SSO | Keycloak (realm `northstar`) acting as OIDC IdP for both BUs via the `Nop.Plugin.ExternalAuth.Keycloak` plugin | `scripts/test-sso.sh` |
+| ADR-003 | Reliable cross-BU events to the CRM | Transactional outbox in each BU DB, relay publisher to RabbitMQ, dedicated `EspoCrmConsumer` worker writing to EspoCRM | `scripts/test-outbox.sh` |
+| ADR-004 | BU-local ERP integration that must not bring the storefront down | `Nop.Plugin.Misc.ErpIntegration` calling an `ErpStub` worker per BU, guarded by an in-process circuit breaker | `scripts/test-erp-failure.sh`, `scripts/test-erp-recovery.sh` |
+| ADR-005 | Federated product search with graceful DB fallback | `Nop.Plugin.Search.Meilisearch` indexing per-BU into a shared Meilisearch instance, with vendor patches in `ProductService` so the storefront falls back to the SQL search when Meilisearch is unreachable | `scripts/test-search.sh` |
 
-Using the latest Microsoft technologies, nopCommerce provides high performance, stability, and security. nopCommerce is also fully compatible with Azure and web farms.
+---
 
-Our clear and detailed [documentation](https://docs.nopcommerce.com/developer/index.html?utm_source=github&utm_medium=referral&utm_campaign=documentation&utm_content=text) and [online course](https://nopcommerce.com/training?utm_source=github&utm_medium=referral&utm_campaign=course&utm_content=text) for developers will help you start with nopCommerce easily.
+## 2. Repository layout (assignment-relevant parts)
 
+```
+.
+├── docker-compose.yml              Full federated stack (8 services, see §4)
+├── Dockerfile                      nopCommerce build (used by nop_bu1 / nop_bu2)
+├── scripts/
+│   ├── install-nop.sh              Idempotent installer: seeds both BUs, installs plugins,
+│   │                               wires Keycloak + Meilisearch + ERP + RabbitMQ settings
+│   ├── test-isolation.sh           ADR-001 verification
+│   ├── test-sso.sh                 ADR-002 verification
+│   ├── test-outbox.sh              ADR-003 verification
+│   ├── test-erp-failure.sh         ADR-004 circuit-breaker open path
+│   ├── test-erp-recovery.sh        ADR-004 circuit-breaker close path
+│   └── test-search.sh              ADR-005 live / fallback / recovery
+├── spike/
+│   ├── docker-compose.spike.yml    Original Keycloak-only spike (kept for reference)
+│   ├── keycloak/realm-northstar.json  Realm pre-loaded with bu1/bu2 OIDC clients + test user
+│   ├── pg-init/01-citext.sql       Postgres extension needed by nopCommerce migrations
+│   ├── HOW_TO_TEST.md              Walkthrough for the SSO spike
+│   └── SPIKE_REPORT.md             Spike write-up (ADR-002)
+├── src/
+│   ├── Libraries/Nop.Services/Catalog/ProductService.cs
+│   │       Vendor file patched for ADR-005 (linq2db / in-memory-results compatibility)
+│   ├── Plugins/
+│   │   ├── Nop.Plugin.ExternalAuth.Keycloak/   ADR-002 OIDC integration
+│   │   ├── Nop.Plugin.Misc.OutboxRelay/        ADR-003 outbox writer + RabbitMQ publisher
+│   │   ├── Nop.Plugin.Misc.ErpIntegration/     ADR-004 ERP client + circuit breaker
+│   │   └── Nop.Plugin.Search.Meilisearch/      ADR-005 search provider + indexer
+│   └── Workers/
+│       ├── EspoCrmConsumer/        ADR-003 RabbitMQ -> EspoCRM REST relay
+│       └── ErpStub/                ADR-004 BU-local fake ERP (toggleable failure mode)
+└── docs/part1/                     Part 1 deliverable PDFs (report + images)
+```
 
-### The advantages of working with nopCommerce ###
+The plugins live inside the original `src/Plugins/` tree so they are picked up by the standard nopCommerce plugin loader. The vendor PRs/forks of upstream nopCommerce files are limited to a single file (`ProductService.cs`); every other change is additive.
 
-nopCommerce offers powerful [out-of-the-box features](https://www.nopcommerce.com/features?utm_source=github&utm_medium=referral&utm_campaign=features&utm_content=text) for creating an online store of any size and type.
+---
 
-nopCommerce is integrated with all the popular third-party services. You can find thousands of integrations on nopCommerce [Marketplace](https://www.nopcommerce.com/marketplace?utm_source=github&utm_medium=referral&utm_campaign=marketplace&utm_content=text).
+## 3. New first-party components
 
-The [Web API plugin](https://www.nopcommerce.com/web-api?utm_source=github&utm_medium=referral&utm_campaign=WebAPI&utm_content=text) by the nopCommerce team lets you build integrations with third-party services or mobile applications using REST. The Web API plugin is available with source code and covers all methods of nopCommerce: backend and frontend. You can read more about it [here](https://www.nopcommerce.com/web-api?utm_source=github&utm_medium=referral&utm_campaign=WebAPI&utm_content=text).
+### 3.1 `Nop.Plugin.ExternalAuth.Keycloak` (ADR-002)
+- Implements `IExternalAuthenticationMethod` and registers `AddOpenIdConnect` against the per-BU client (`bu1-nopcommerce` / `bu2-nopcommerce`).
+- `ResponseMode = "query"` is used instead of the default `form_post` so the OIDC correlation cookie (SameSite=Lax) survives the redirect.
+- Built with `Microsoft.NET.Sdk.Web` because the OIDC handler is part of the ASP.NET Core shared framework and is not redistributable as a normal NuGet.
 
-Friendly members of the [nopCommerce community](https://www.nopcommerce.com/boards?utm_source=github&utm_medium=referral&utm_campaign=forum&utm_content=text) will always help with advice and share their experiences. nopCommerce core development team provides [professional support](https://www.nopcommerce.com/nopcommerce-premium-support-services?utm_source=github&utm_medium=referral&utm_campaign=premium_support&utm_content=text) within 24 hours.
+### 3.2 `Nop.Plugin.Misc.OutboxRelay` (ADR-003)
+- `OutboxWriter` persists outbound integration events into an `OutboxMessage` table in the BU's own database, inside the same transaction as the business write.
+- `OrderPlacedConsumer` hooks the nopCommerce `OrderPlacedEvent` and inserts the event row.
+- `OutboxRelayService` is a hosted background service that polls the outbox table and ships rows to RabbitMQ via `RabbitMqPublisher`.
+- Each BU writes to its own outbox: cross-BU coupling is only via the message broker.
 
+### 3.3 `EspoCrmConsumer` worker (ADR-003)
+- .NET worker service subscribed to the RabbitMQ exchange populated by both BUs.
+- Translates `OrderMessage` payloads into EspoCRM REST calls (`EspoCrmClient`) so EspoCRM becomes the single source of truth for customer / order history across BUs.
 
-## Store demo ##
+### 3.4 `Nop.Plugin.Misc.ErpIntegration` + `ErpStub` (ADR-004)
+- `ErpStockService` calls the BU-local `ErpStub` worker over HTTP for stock lookups.
+- `ErpCircuitBreaker` opens after consecutive failures, fast-fails for a cool-down window, then probes for recovery. While open the storefront degrades gracefully via `ErpStockBannerViewComponent` instead of throwing.
+- `ErpStub` exposes a `/health` endpoint and a toggleable failure mode used by the recovery / failure scripts.
 
-Evaluate the functionality and convenience of nopCommerce as a customer and store owner.
+### 3.5 `Nop.Plugin.Search.Meilisearch` (ADR-005)
+- `MeilisearchSearchProvider` implements the nopCommerce search-provider contract; documents use a composite `{buId}-{productId}` ID and a filterable `buId` attribute so the shared index can be queried per-BU without cross-tenant leakage.
+- `ProductSavedConsumer` listens to `EntityInserted/Updated/DeletedEvent<Product>` so the index stays in sync without a batch reindex job.
+- `MeilisearchClient` and `MeilisearchIndexer` wrap the REST API and the bulk upsert / delete operations.
+- `SearchFallbackBannerViewComponent` surfaces an "operating in degraded search mode" banner whenever the provider trips into the DB-backed fallback path.
+- `FallbackSignal` / `IFallbackSignal` carry the "search provider threw" decision out of `ProductService` into the view layer.
 
-Front End | Admin area
-----|------
-[![ScreenShot](https://www.nopcommerce.com/images/github/public-demo.png#v1)](https://demo.nopcommerce.com?utm_source=github&utm_medium=referral&utm_campaign=demo_store&utm_content=button) | [![ScreenShot](https://www.nopcommerce.com/images/github/admin-demo.png#v1)](https://admin-demo.nopcommerce.com/admin?utm_source=github&utm_medium=referral&utm_campaign=demo_store&utm_content=button)
+#### Vendor patches in `src/Libraries/Nop.Services/Catalog/ProductService.cs`
+nopCommerce 5.0 mixes `linq2db` queries with in-memory `IEnumerable` results coming from a search provider, which produces hybrid expression trees that `linq2db` cannot translate. Three minimally invasive patches were applied:
+1. Gate the SKU / category-name / manufacturer-name / product-tag `Union` blocks with `&& runStandardSearch` so they are skipped when a search provider supplied the candidate set.
+2. Replace the `productsQuery` join against `productsByKeywords` with a materialised `keywordProductIds.Contains(p.Id)` filter.
+3. Replace the provider-ordering `GroupJoin` with an in-memory dictionary lookup over the materialised result list (`new Dictionary<int, int>` keyed by product id, value = provider rank), preserving the `ProductSortingEnum.Position` semantics.
 
+These are the only edits to upstream code; everything else lives in plugins.
 
-### nopCommerce resources ###
+---
 
-nopCommerce official site: [https://www.nopcommerce.com](https://www.nopcommerce.com/?utm_source=github&utm_medium=referral&utm_campaign=homepage&utm_content=links)
+## 4. Runtime topology (`docker-compose.yml`)
 
-* [Demo store](https://www.nopcommerce.com/demo?utm_source=github&utm_medium=referral&utm_campaign=demo_store&utm_content=links)
-* [Download nopCommerce](https://www.nopcommerce.com/download-nopcommerce?utm_source=github&utm_medium=referral&utm_campaign=download_nop&utm_content=links)
-* [Online course for developers](https://nopcommerce.com/training?utm_source=github&utm_medium=referral&utm_campaign=course&utm_content=links)
-* [Feature list](https://www.nopcommerce.com/features?utm_source=github&utm_medium=referral&utm_campaign=features&utm_content=links)
-* [Web API plugin](https://www.nopcommerce.com/web-api?utm_source=github&utm_medium=referral&utm_campaign=WebAPI&utm_content=links)
-* [nopCommerce documentation](https://docs.nopcommerce.com?utm_source=github&utm_medium=referral&utm_campaign=documentation&utm_content=links)
-* [Community forums](https://www.nopcommerce.com/boards?utm_source=github&utm_medium=referral&utm_campaign=forum&utm_content=links)
-* [Premium support services](https://www.nopcommerce.com/nopcommerce-premium-support-services?utm_source=github&utm_medium=referral&utm_campaign=premium_support&utm_content=links)
-* [Certified developer program](https://www.nopcommerce.com/certified-developer-program?utm_source=github&utm_medium=referral&utm_campaign=certified_developer&utm_content=links)
-* [nopCommerce partners](https://www.nopcommerce.com/partners?utm_source=github&utm_medium=referral&utm_campaign=solution_partners&utm_content=links)
+Single `docker compose up` brings up the eight services that back ADR-001..005:
 
-nopCommerce YouTube: [The Architecture behind the nopCommerce eCommerce Platform](https://www.youtube.com/watch?v=6gLbizzSA9o&list=PLnL_aDfmRHwtJmzeA7SxrpH3-XDY2ue0a)
+```
+keycloak (8080) ──── shared IdP for both BUs
+db_bu1 (Postgres)    db_bu2 (Postgres)
+nop_bu1 (8081)  ──── nop_bu2 (8082)
+rabbitmq (5672/15672)
+meilisearch (7700)
+espocrm_db (MariaDB) + espocrm (8083)
+espocrm_consumer (worker, no port)
+erp_bu1 (9001) + erp_bu2 (9002)
+```
 
+Per-BU isolation is enforced by environment variables (each BU only knows its own `db_*`, `erp_*`, OIDC client) and by separate App_Data volumes (`nop_bu1_app_data`, `nop_bu2_app_data`). The realm import file under `spike/keycloak/` is mounted into Keycloak so OIDC clients and the test user exist on the first boot.
 
-### Earn with nopCommerce ###
+---
 
-60,000 stores worldwide are powered by nopCommerce, and 10,000 new stores open every year. nopCommerce [solution partners’ directory](https://www.nopcommerce.com/partners?utm_source=github&utm_medium=referral&utm_campaign=solution_partners&utm_content=text_become_partner) gets 80,000+ page views per year from store owners who are looking for a partner to build a store from scratch, migrate from another platform, or improve and customize an existing store.
+## 5. Running and verifying the assignment
 
-Become a solution partner of nopCommerce and get new clients – [learn more](https://www.nopcommerce.com/become-partner?utm_source=github&utm_medium=referral&utm_campaign=become-partner&utm_content=learn_more).
+1. `docker compose up --build` and wait until all services report healthy.
+2. `./scripts/install-nop.sh` to seed both BUs, install the plugins, and wire the Keycloak / Meilisearch / ERP / RabbitMQ configuration. The script is idempotent.
+3. Run the smoke tests for each ADR (see table in §1). Each script prints a PASS/FAIL line per check.
 
-Create a new graphical theme or develop a new plugin or integration and sell it on the nopCommerce [Marketplace](https://www.nopcommerce.com/marketplace?utm_source=github&utm_medium=referral&utm_campaign=marketplace&utm_content=text_sell_on_marketplace).
+URLs once the stack is up:
 
+- BU1 storefront: <http://localhost:8081>
+- BU2 storefront: <http://localhost:8082>
+- Keycloak admin: <http://localhost:8080> (admin / admin)
+- RabbitMQ management: <http://localhost:15672> (northstar / northstar)
+- Meilisearch: <http://localhost:7700>
+- EspoCRM: <http://localhost:8083> (admin / admin)
+- ERP stubs: <http://localhost:9001/health>, <http://localhost:9002/health>
 
-### Contribute ###
+---
 
-As a free and open-source project, we are very grateful to everyone who helps us to develop nopCommerce. Please find more details about the options and bonuses for contributors at [contribute page](https://www.nopcommerce.com/contribute?utm_source=github&utm_medium=referral&utm_campaign=contribute&utm_content=text).
+## 6. Documentation deliverables
+
+The written deliverables for Part 1 (current-state analysis, quality-attribute scenarios, framework choice, target architecture, ADRs, risk plan, spike report) are bundled in `docs/part1/` as `report/AS_Project-2.pdf`. The spike report is also available as Markdown under `spike/SPIKE_REPORT.md`.
