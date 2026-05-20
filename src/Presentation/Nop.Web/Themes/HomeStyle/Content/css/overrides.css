@@ -1,0 +1,25 @@
+/* ============================================================
+   HomeStyle — Northstar Living  (BU1)
+   Warm terracotta palette layered on top of DefaultClean.
+   Only CSS custom properties + a thin top-bar accent are
+   changed; all layout, typography and images come from
+   DefaultClean/Content/css/styles.css loaded before this.
+   ============================================================ */
+
+:root {
+  --accent-blue-color:        #c47c5a;   /* terracotta */
+  --accent-blue-active-color: #9a5839;   /* deeper terracotta on hover/active */
+}
+
+/* Thin brand stripe at the very top of every page */
+body::before {
+  content: "";
+  display: block;
+  height: 4px;
+  background: linear-gradient(90deg, #c47c5a 0%, #e8a87c 60%, #f5c9a3 100%);
+}
+
+/* Slightly warmer body background */
+body {
+  background-color: #fdfaf7;
+}

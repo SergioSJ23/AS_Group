@@ -1,0 +1,25 @@
+/* ============================================================
+   WorkSpace — Northstar Professionals  (BU2)
+   Cool teal palette layered on top of DefaultClean.
+   Only CSS custom properties + a thin top-bar accent are
+   changed; all layout, typography and images come from
+   DefaultClean/Content/css/styles.css loaded before this.
+   ============================================================ */
+
+:root {
+  --accent-blue-color:        #1a7a8a;   /* professional teal */
+  --accent-blue-active-color: #115e6b;   /* deeper teal on hover/active */
+}
+
+/* Thin brand stripe at the very top of every page */
+body::before {
+  content: "";
+  display: block;
+  height: 4px;
+  background: linear-gradient(90deg, #1a7a8a 0%, #2aa0b4 60%, #7dd3e0 100%);
+}
+
+/* Slightly cooler body background */
+body {
+  background-color: #f6fbfc;
+}

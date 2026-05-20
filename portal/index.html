@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Northstar Living Group — Group Portal</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f4f5f7;
+      color: #333;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #16213e;
+      color: #fff;
+      padding: 48px 24px 40px;
+      text-align: center;
+      border-bottom: 4px solid #1a7a8a;
+    }
+    header .group-name {
+      font-size: 2.2rem;
+      font-weight: 300;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    header .group-name span { color: #c47c5a; font-weight: 600; }
+    header p {
+      margin-top: 10px;
+      font-size: 0.95rem;
+      color: #8892a4;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 960px;
+      margin: 56px auto;
+      padding: 0 24px;
+    }
+
+    .section-label {
+      text-align: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #9aa0ab;
+      margin-bottom: 28px;
+    }
+
+    /* ── BU cards ── */
+    .brands {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      margin-bottom: 48px;
+    }
+
+    .brand-card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 40px 32px 36px;
+      box-shadow: 0 2px 16px rgba(0,0,0,.07);
+      text-align: center;
+      transition: transform .18s ease, box-shadow .18s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .brand-card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 5px;
+    }
+    .brand-card.homestyle::before { background: linear-gradient(90deg,#c47c5a,#e8a87c); }
+    .brand-card.workspace::before { background: linear-gradient(90deg,#1a7a8a,#2aa0b4); }
+    .brand-card:hover { transform: translateY(-5px); box-shadow: 0 10px 32px rgba(0,0,0,.12); }
+
+    .brand-icon {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      margin: 0 auto 20px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2rem;
+    }
+    .brand-card.homestyle .brand-icon { background: #fde8d8; }
+    .brand-card.workspace .brand-icon { background: #d0edf3; }
+
+    .brand-card h2 { font-size: 1.7rem; font-weight: 700; margin-bottom: 6px; }
+    .brand-card.homestyle h2 { color: #c47c5a; }
+    .brand-card.workspace h2 { color: #1a7a8a; }
+
+    .brand-card .tagline { color: #777; font-size: 0.9rem; margin-bottom: 4px; }
+    .brand-card .port    { font-size: 0.75rem; color: #b0b8c4; font-family: monospace; margin-bottom: 24px; }
+
+    .visit-btn {
+      display: inline-block;
+      padding: 12px 30px;
+      border-radius: 5px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      text-decoration: none;
+      letter-spacing: 0.5px;
+      transition: opacity .15s;
+    }
+    .visit-btn:hover { opacity: .85; }
+    .brand-card.homestyle .visit-btn { background: #c47c5a; color: #fff; }
+    .brand-card.workspace .visit-btn { background: #1a7a8a; color: #fff; }
+
+    /* ── Shared infra panel ── */
+    .infra-panel {
+      background: #fff;
+      border-radius: 10px;
+      padding: 32px 28px;
+      box-shadow: 0 2px 16px rgba(0,0,0,.07);
+      margin-bottom: 48px;
+    }
+    .infra-panel h3 {
+      text-align: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #9aa0ab;
+      margin-bottom: 20px;
+    }
+    .chips { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    .chip {
+      border-radius: 20px;
+      padding: 7px 15px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .chip.shared { background: #eaf6ee; color: #2d7a4a; }
+    .chip.local  { background: #fff3e0; color: #b56e00; }
+
+    /* ── Scenario note ── */
+    .scenario-note {
+      background: #16213e;
+      color: #8892a4;
+      border-radius: 10px;
+      padding: 24px 28px;
+      font-size: 0.82rem;
+      line-height: 1.7;
+    }
+    .scenario-note strong { color: #c47c5a; }
+
+    footer {
+      text-align: center;
+      padding: 32px 24px;
+      color: #b0b8c4;
+      font-size: 0.72rem;
+      letter-spacing: 0.5px;
+    }
+
+    @media (max-width: 600px) {
+      .brands { grid-template-columns: 1fr; }
+      header .group-name { font-size: 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="group-name">Northstar <span>Living</span> Group</div>
+    <p>Federated commerce platform &mdash; one identity, two autonomous business units</p>
+  </header>
+
+  <main>
+
+    <p class="section-label">Business Units</p>
+
+    <div class="brands">
+      <div class="brand-card homestyle">
+        <div class="brand-icon">🏠</div>
+        <h2>HomeStyle</h2>
+        <p class="tagline">Premium home furnishings &amp; decor</p>
+        <p class="port">localhost:8081</p>
+        <a href="http://localhost:8081" class="visit-btn">Visit Store &rarr;</a>
+      </div>
+
+      <div class="brand-card workspace">
+        <div class="brand-icon">💼</div>
+        <h2>WorkSpace</h2>
+        <p class="tagline">Professional office solutions &amp; tech</p>
+        <p class="port">localhost:8082</p>
+        <a href="http://localhost:8082" class="visit-btn">Visit Store &rarr;</a>
+      </div>
+    </div>
+
+    <div class="infra-panel">
+      <h3>Shared Group Infrastructure (ADR-001 &mdash; ADR-005)</h3>
+      <div class="chips">
+        <span class="chip shared">🔐 Keycloak SSO &mdash; unified identity (ADR-002)</span>
+        <span class="chip shared">🔍 Meilisearch &mdash; federated search (ADR-005)</span>
+        <span class="chip shared">📨 RabbitMQ &mdash; transactional outbox (ADR-003)</span>
+        <span class="chip shared">👥 EspoCRM &mdash; shared customer data (ADR-003)</span>
+        <span class="chip local">⚡ ERP BU1 &mdash; :9001 (local to HomeStyle)</span>
+        <span class="chip local">⚡ ERP BU2 &mdash; :9002 (local to WorkSpace)</span>
+      </div>
+    </div>
+
+    <div class="scenario-note">
+      <strong>Scenario A — Federated Commerce After Acquisitions.</strong>
+      Each BU runs an isolated nopCommerce instance with its own PostgreSQL database (ADR-001).
+      SSO via Keycloak lets the same customer identity log in to either brand.
+      Orders flow asynchronously to EspoCRM through per-BU transactional outboxes.
+      The ERP circuit breaker (ADR-004) lets one BU degrade without collapsing the other.
+    </div>
+
+  </main>
+
+  <footer>
+    Northstar Living Group &bull; Software Architecture Assignment 2 &bull; Scenario A Demo
+  </footer>
+
+</body>
+</html>

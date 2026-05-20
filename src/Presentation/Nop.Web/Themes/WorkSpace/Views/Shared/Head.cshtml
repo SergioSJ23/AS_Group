@@ -1,0 +1,22 @@
+@using Nop.Core.Domain.Catalog
+
+@inject CatalogSettings catalogSettings
+
+@{
+    Layout = "";
+    var supportRtl = await Html.ShouldUseRtlThemeAsync();
+
+    // Load DefaultClean base (images live there, relative paths resolve correctly)
+    NopHtml.AppendCssFileParts(
+        supportRtl
+            ? "~/Themes/DefaultClean/Content/css/styles.rtl.css"
+            : "~/Themes/DefaultClean/Content/css/styles.css");
+
+    // WorkSpace brand overrides: professional teal palette + header accent
+    NopHtml.AppendCssFileParts("~/Themes/WorkSpace/Content/css/overrides.css");
+
+    if (catalogSettings.DisplayAllPicturesOnCatalogPages)
+        NopHtml.AppendCssFileParts("~/lib_npm/swiper/swiper-bundle.min.css");
+
+    NopHtml.AppendCssFileParts("~/lib_npm/jquery-ui-dist/jquery-ui.min.css");
+}

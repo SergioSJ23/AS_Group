@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"C:\\\\Users\\\\sergi\\\\Desktop\\\\AS\\\\AS_Group\\\\portal\")",
+      "Bash(dir \"C:\\\\Users\\\\sergi\\\\Desktop\\\\AS\\\\AS_Group\\\\scripts\")"
+    ]
+  }
+}

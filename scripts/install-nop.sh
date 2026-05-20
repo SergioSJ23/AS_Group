@@ -14,6 +14,7 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin123}"
 
 echo "==> Pre-flight checks"
@@ -163,6 +164,36 @@ for port in 8081 8082; do
         exit 1
     fi
 done
+
+# ── Per-BU configuration ──────────────────────────────────────────────────
+# Sets the store name and the active theme for a BU via direct DB writes.
+# Theme change requires a process restart to take effect (handled by the
+# restart that follows the wait_for_storefront loop above).
+configure_bu () {
+    local bu="$1" store_name="$2" theme="$3"
+    local db_container="northstar-db_${bu}-1"
+    local db_name="nop_${bu}"
+
+    echo "==> ${bu}: configuring store name '${store_name}' + theme '${theme}'"
+    docker exec "$db_container" psql -U nop -d "$db_name" -c \
+        "UPDATE \"Store\" SET \"Name\" = '${store_name}' WHERE \"Id\" = 1;" >/dev/null
+    docker exec "$db_container" psql -U nop -d "$db_name" -c \
+        "UPDATE \"Setting\" SET \"Value\" = '${theme}' WHERE LOWER(\"Name\") = 'storeinformationsettings.defaultstoretheme';" >/dev/null
+    echo "    done"
+}
+
+# Seeds per-BU products by piping the matching SQL file into psql.
+# Must be called BEFORE install_meilisearch_plugin so BulkIndexAsync finds the rows.
+seed_bu_products () {
+    local bu="$1"
+    local db_container="northstar-db_${bu}-1"
+    local db_name="nop_${bu}"
+    local sql_file="${SCRIPT_DIR}/seed-${bu}.sql"
+
+    echo "==> ${bu}: seeding products from ${sql_file}"
+    docker exec -i "$db_container" psql -U nop -d "$db_name" < "$sql_file"
+    echo "    done"
+}
 
 # Helpers for the admin flow: log in as the admin, drive plugin install + activation.
 # The plugin list page reuses POST /Admin/Plugin/List with form fields that match the
@@ -398,6 +429,14 @@ install_meilisearch_plugin () {
         --data-urlencode "__RequestVerificationToken=${token}" \
         --data-urlencode "plugin-apply-changes=1" || true
 }
+
+# ── Per-BU theme + store name ─────────────────────────────────────────────
+configure_bu bu1 "HomeStyle — Northstar Living"    "HomeStyle"
+configure_bu bu2 "WorkSpace — Northstar Professionals" "WorkSpace"
+
+# ── Seed products (must happen before Meilisearch plugin install) ─────────
+seed_bu_products bu1
+seed_bu_products bu2
 
 # Phase A: prepare + apply install for all plugins on both BUs.
 install_keycloak_plugin bu1 8081
