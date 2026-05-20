@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(dir \"C:\\\\Users\\\\sergi\\\\Desktop\\\\AS\\\\AS_Group\\\\portal\")",
-      "Bash(dir \"C:\\\\Users\\\\sergi\\\\Desktop\\\\AS\\\\AS_Group\\\\scripts\")"
+      "Bash(dir \"C:\\\\Users\\\\sergi\\\\Desktop\\\\AS\\\\AS_Group\\\\scripts\")",
+      "Bash(curl -s http://localhost:7700/indexes/products/search -H 'Authorization: Bearer northstar-meili-master-key' -H 'Content-Type: application/json' -d '{\"limit\": 6}')",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s http://localhost:7700/indexes/products/search -H 'Authorization: Bearer northstar-meili-master-key' -H 'Content-Type: application/json' -d '{\"q\": \"sofa chair desk\", \"limit\": 10}')",
+      "Bash(curl -sS -o /dev/null -w \"BU1 asus-laptop: HTTP %{http_code}\\\\n\" \"http://localhost:8081/asus-laptop\")",
+      "Bash(curl -sS -o /dev/null -w \"BU1 linen-sofa: HTTP %{http_code}\\\\n\" \"http://localhost:8081/linen-sofa\")",
+      "Bash(curl -sS -o /dev/null -w \"BU2 ergonomic-mesh-chair: HTTP %{http_code}\\\\n\" \"http://localhost:8082/ergonomic-mesh-chair\")",
+      "Bash(curl -sS -o /dev/null -w \"BU2 adjustable-standing-desk: HTTP %{http_code}\\\\n\" \"http://localhost:8082/adjustable-standing-desk\")"
     ]
   }
 }

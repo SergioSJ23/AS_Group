@@ -8,7 +8,7 @@ DECLARE
     v_cat2  integer;
     v_prod  integer;
 BEGIN
-    IF EXISTS (SELECT 1 FROM "Category" WHERE "Deleted" = false LIMIT 1) THEN
+    IF EXISTS (SELECT 1 FROM "Category" WHERE "Name" = 'Furniture' AND "Deleted" = false LIMIT 1) THEN
         RAISE NOTICE 'BU1 already seeded – skipping';
         RETURN;
     END IF;
