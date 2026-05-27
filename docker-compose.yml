@@ -208,6 +208,8 @@ services:
       KEYCLOAK_CLIENT_SECRET: bu1-secret
     volumes:
       - nop_bu1_app_data:/app/App_Data
+      - ./assets/images/bu1:/app/wwwroot/images/uploaded
+      - nop_bu1_thumbs:/app/wwwroot/images/thumbs
     depends_on:
       db_bu1:
         condition: service_healthy
@@ -252,6 +254,8 @@ services:
       KEYCLOAK_CLIENT_SECRET: bu2-secret
     volumes:
       - nop_bu2_app_data:/app/App_Data
+      - ./assets/images/bu2:/app/wwwroot/images/uploaded
+      - nop_bu2_thumbs:/app/wwwroot/images/thumbs
     depends_on:
       db_bu2:
         condition: service_healthy
@@ -271,6 +275,8 @@ volumes:
   db_bu2_data:
   nop_bu1_app_data:
   nop_bu2_app_data:
+  nop_bu1_thumbs:
+  nop_bu2_thumbs:
   rabbitmq_data:
   meilisearch_data:
   espocrm_data:
