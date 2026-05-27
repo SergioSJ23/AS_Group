@@ -392,7 +392,7 @@
       const price = p.price != null ? formatPrice(p.price) : '';
       const imgSrc = p.pictureUrl || p.imageUrl || '';
       const thumb = imgSrc
-        ? `<img src="${imgSrc}" alt="${p.name}" onerror="this.outerHTML='<div class=\\"thumb-fallback ${bu.cls}\\">${emoji}</div>'">`
+        ? `<img src="${imgSrc}" alt="${p.name}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="thumb-fallback ${bu.cls}" style="display:none">${emoji}</div>`
         : `<div class="thumb-fallback ${bu.cls}">${emoji}</div>`;
       return `
         <div class="product-card">
