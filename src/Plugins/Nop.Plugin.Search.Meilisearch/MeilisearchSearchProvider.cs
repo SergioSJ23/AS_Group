@@ -51,12 +51,21 @@ public class MeilisearchSearchProvider : BasePlugin, ISearchProvider, IWidgetPlu
     public async Task<List<int>> SearchProductsAsync(string keywords, bool isLocalized)
     {
         using var cts = new CancellationTokenSource(MeilisearchDefaults.SearchTimeout);
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         try
         {
-            return await _meilisearchClient.SearchProductIdsAsync(keywords, cts.Token);
+            var result = await _meilisearchClient.SearchProductIdsAsync(keywords, cts.Token);
+            SearchMetrics.SearchDurationMs.Record(
+                System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+                new KeyValuePair<string, object?>("backend", "meili"));
+            return result;
         }
         catch (Exception ex)
         {
+            SearchMetrics.SearchDurationMs.Record(
+                System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+                new KeyValuePair<string, object?>("backend", "error"));
+            SearchMetrics.SearchFallbackTotal.Add(1);
             _logger.LogWarning(ex, "Meilisearch query failed — raising fallback signal so DB search takes over");
             _fallbackSignal.Trigger();
             throw;

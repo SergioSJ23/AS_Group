@@ -50,6 +50,8 @@ public class OutboxRelayService : BackgroundService
              .OrderBy(m => m.CreatedAt)
              .Take(50));
 
+        OutboxMetrics.SetUnpublishedCount(pending.Count);
+
         if (pending.Count == 0)
             return;
 
@@ -61,11 +63,17 @@ public class OutboxRelayService : BackgroundService
             {
                 var routingKey = $"{message.BuId}.order.placed";
                 await _publisher.PublishAsync(routingKey, message.Payload, cancellationToken);
-                message.PublishedAt = DateTime.UtcNow;
+                var publishedAt = DateTime.UtcNow;
+                message.PublishedAt = publishedAt;
                 published.Add(message);
+
+                OutboxMetrics.PublishLatencyMs.Record((publishedAt - message.CreatedAt).TotalMilliseconds,
+                    new KeyValuePair<string, object?>("bu", message.BuId));
+                OutboxMetrics.PublishedTotal.Add(1, new KeyValuePair<string, object?>("bu", message.BuId));
             }
             catch (Exception ex)
             {
+                OutboxMetrics.PublishFailureTotal.Add(1, new KeyValuePair<string, object?>("bu", message.BuId));
                 _logger.LogError(ex, "Failed to publish outbox message {Id}, will retry", message.Id);
             }
         }

@@ -2,6 +2,7 @@
 using Nop.Core.Configuration;
 using Nop.Core.Infrastructure;
 using Nop.Web.Framework.Infrastructure.Extensions;
+using OpenTelemetry.Metrics;
 
 namespace Nop.Web;
 
@@ -41,10 +42,24 @@ public partial class Program
         //add services to the application and configure service provider
         builder.Services.ConfigureApplicationServices(builder);
 
+        // OpenTelemetry: register before Build() so plugin Meters are discovered at startup.
+        // "Northstar.*" wildcard picks up every meter declared in the OutboxRelay,
+        // ErpIntegration and Meilisearch plugins (see NorthstarMetrics statics in each).
+        builder.Services.AddOpenTelemetry()
+            .WithMetrics(metrics => metrics
+                .AddAspNetCoreInstrumentation()
+                .AddMeter("Northstar.*")
+                .AddPrometheusExporter());
+
         var app = builder.Build();
 
         //configure the application HTTP request pipeline
         app.ConfigureRequestPipeline();
+
+        // Prometheus scrape endpoint at /metrics. Mapped after the Nop pipeline so the
+        // standard MVC routes win for everything else; /metrics is an exact-path match.
+        app.MapPrometheusScrapingEndpoint();
+
         await app.PublishAppStartedEventAsync();
 
         await app.RunAsync();
