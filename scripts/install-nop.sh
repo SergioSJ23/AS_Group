@@ -546,11 +546,112 @@ for port in 8081 8082; do
     fi
 done
 
+# ── Upload product images via nopCommerce admin API ──────────────────────────
+# Uploads each image file, links it to the product by SKU, and sets SeoFilename.
+# Idempotent: skips products that already have a picture mapping.
+upload_product_images () {
+    local bu="$1" host_port="$2"
+    local base="http://localhost:${host_port}"
+    local db_container="northstar-db_${bu}-1"
+    local db_name="nop_${bu}"
+    local assets_dir="${SCRIPT_DIR}/../assets/images/${bu}"
+    local cookies
+    cookies=$(mktemp)
+    trap 'rm -f "$cookies"' RETURN
+
+    echo "==> ${bu}: uploading product images"
+    admin_login "$bu" "$host_port" "$cookies" "$(bu_email "$bu")" || return 1
+
+    # Each entry: "image_file|SKU|seo_filename"
+    local entries=()
+    if [ "$bu" = "bu1" ]; then
+        entries=(
+            "linen-sofa.webp|HS-SOFA-001|linen-sofa"
+            "walnut-coffee-table.jpg|HS-TABLE-001|walnut-coffee-table"
+            "rattan-pendant-light.jpg|HS-LIGHT-001|rattan-pendant-light"
+            "marble-table-lamp.webp|HS-LIGHT-002|marble-table-lamp"
+        )
+    else
+        entries=(
+            "ergonomic-mesh-chair.jpg|WS-CHAIR-001|ergonomic-mesh-chair"
+            "adjustable-standing-desk.jpg|WS-DESK-001|adjustable-standing-desk"
+            "27-ultrawide-monitor.webp|WS-MON-001|27-ultrawide-monitor"
+            "cable-management-kit.jpg|WS-ACC-001|cable-management-kit"
+        )
+    fi
+
+    local html token
+    html=$(mktemp)
+    curl -sS -b "$cookies" -c "$cookies" -o "$html" "${base}/Admin/Picture/List"
+    token=$(extract_token "$html"); rm -f "$html"
+    [ -n "$token" ] || { echo "WARN: no token for picture upload, skipping images"; return 0; }
+
+    for entry in "${entries[@]}"; do
+        local img_file sku seo
+        img_file="${assets_dir}/$(echo "$entry" | cut -d'|' -f1)"
+        sku=$(echo "$entry" | cut -d'|' -f2)
+        seo=$(echo "$entry" | cut -d'|' -f3)
+
+        # Get product ID by SKU
+        local product_id
+        product_id=$(docker exec "$db_container" psql -U nop -d "$db_name" -tAc \
+            "SELECT \"Id\" FROM \"Product\" WHERE \"Sku\" = '${sku}' AND \"Deleted\" = false LIMIT 1;")
+        if [ -z "$product_id" ]; then
+            echo "    WARN: product SKU ${sku} not found, skipping"
+            continue
+        fi
+
+        # Skip if product already has a picture mapping
+        local existing
+        existing=$(docker exec "$db_container" psql -U nop -d "$db_name" -tAc \
+            "SELECT COUNT(*) FROM \"Product_Picture_Mapping\" WHERE \"ProductId\" = ${product_id};")
+        if [ "${existing:-0}" -gt 0 ]; then
+            echo "    ${sku}: already has image — skipping"
+            continue
+        fi
+
+        if [ ! -f "$img_file" ]; then
+            echo "    WARN: image file not found: ${img_file}"
+            continue
+        fi
+
+        # Upload image via admin API
+        local response pic_id
+        response=$(curl -sS -b "$cookies" -c "$cookies" \
+            -X POST "${base}/Admin/Picture/AsyncUpload" \
+            -H "X-Requested-With: XMLHttpRequest" \
+            -F "__RequestVerificationToken=${token}" \
+            -F "qqfile=@${img_file}")
+        pic_id=$(echo "$response" | jq -r '.pictureId // empty' 2>/dev/null)
+
+        if [ -z "$pic_id" ] || [ "$pic_id" = "null" ]; then
+            echo "    WARN: upload failed for ${img_file}: ${response}"
+            continue
+        fi
+
+        # Set SEO filename on the picture record
+        docker exec "$db_container" psql -U nop -d "$db_name" -c \
+            "UPDATE \"Picture\" SET \"SeoFilename\" = '${seo}' WHERE \"Id\" = ${pic_id};" >/dev/null
+
+        # Link picture to product
+        docker exec "$db_container" psql -U nop -d "$db_name" -c \
+            "INSERT INTO \"Product_Picture_Mapping\" (\"ProductId\", \"PictureId\", \"DisplayOrder\")
+             VALUES (${product_id}, ${pic_id}, 1)
+             ON CONFLICT DO NOTHING;" >/dev/null
+
+        echo "    ${sku} → pic_id=${pic_id} (${seo})"
+    done
+}
+
 # Phase C: activate the methods/widgets on the now-loaded plugins.
 activate_keycloak_method bu1 8081
 activate_keycloak_method bu2 8082
 activate_erp_widget bu1 8081
 activate_erp_widget bu2 8082
+
+# Phase D: upload product images via admin API so they are reproducible on any machine.
+upload_product_images bu1 8081
+upload_product_images bu2 8082
 
 echo
 echo "nopCommerce installed for BU1 and BU2."
