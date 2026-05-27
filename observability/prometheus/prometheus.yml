@@ -1,0 +1,34 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+  external_labels:
+    project: northstar
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: rabbitmq
+    static_configs:
+      - targets: ["rabbitmq:15692"]
+
+  - job_name: meilisearch
+    metrics_path: /metrics
+    # Meilisearch enforces the master key on /metrics when MEILI_MASTER_KEY is set
+    # (see docker-compose.yml). Keep this in sync if you rotate the key.
+    authorization:
+      type: Bearer
+      credentials: northstar-meili-master-key
+    static_configs:
+      - targets: ["meilisearch:7700"]
+
+  - job_name: nopcommerce
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["nop_bu1:80"]
+        labels:
+          bu: bu1
+      - targets: ["nop_bu2:80"]
+        labels:
+          bu: bu2

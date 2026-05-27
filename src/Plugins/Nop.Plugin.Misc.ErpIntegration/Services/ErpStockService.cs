@@ -32,12 +32,19 @@ public class ErpStockService : IErpStockService
             return new StockResult(0, IsStale: false, Source: "no-sku");
 
         var cacheKey = $"erp.stock.{sku}";
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
 
         if (_breaker.IsOpen)
         {
             _logger.LogDebug("ERP circuit OPEN — returning cached stock for {Sku}", sku);
-            return _cache.TryGetValue(cacheKey, out int cached)
-                ? new StockResult(cached, IsStale: true, Source: "cache")
+            var hit = _cache.TryGetValue(cacheKey, out int cachedQty);
+            var outcome = hit ? "short-circuit-cache" : "short-circuit-miss";
+            ErpMetrics.CallDurationMs.Record(
+                System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+                new KeyValuePair<string, object?>("outcome", outcome));
+            ErpMetrics.CacheServeTotal.Add(1, new KeyValuePair<string, object?>("reason", "breaker-open"));
+            return hit
+                ? new StockResult(cachedQty, IsStale: true, Source: "cache")
                 : new StockResult(0, IsStale: true, Source: "cache-miss");
         }
 
@@ -52,14 +59,23 @@ public class ErpStockService : IErpStockService
 
             _cache.Set(cacheKey, data.Quantity, CacheTtl);
             _breaker.RecordSuccess();
+            ErpMetrics.CallDurationMs.Record(
+                System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+                new KeyValuePair<string, object?>("outcome", "live"));
             return new StockResult(data.Quantity, IsStale: false, Source: "live");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex, "ERP call failed for {Sku} — circuit state: {State}", sku, _breaker.CurrentState);
             _breaker.RecordFailure();
-            return _cache.TryGetValue(cacheKey, out int cached)
-                ? new StockResult(cached, IsStale: true, Source: "cache")
+            var hit = _cache.TryGetValue(cacheKey, out int cachedQty);
+            ErpMetrics.CallDurationMs.Record(
+                System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds,
+                new KeyValuePair<string, object?>("outcome", hit ? "fallback-cache" : "fallback-miss"));
+            if (hit)
+                ErpMetrics.CacheServeTotal.Add(1, new KeyValuePair<string, object?>("reason", "call-failed"));
+            return hit
+                ? new StockResult(cachedQty, IsStale: true, Source: "cache")
                 : new StockResult(0, IsStale: true, Source: "fallback");
         }
     }

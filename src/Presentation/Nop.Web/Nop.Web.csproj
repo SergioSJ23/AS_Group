@@ -26,6 +26,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- OpenTelemetry: metrics for Northstar plugins + ASP.NET request metrics,
+         exposed as Prometheus at /metrics. Scraped by observability/prometheus.yml. -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.10.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.10.1" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.10.0-beta.1" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- We copy the entire \App_Data directory. But we ignore JSON files and data protection keys  -->
     <Content Include="App_Data\**" CopyToPublishDirectory="PreserveNewest" Exclude="App_Data\*.json" />
     <Content Remove="App_Data\*.json" />

@@ -63,12 +63,18 @@ services:
   # ── RabbitMQ (transactional outbox broker, ADR-003) ───────────────────────
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
+    # Enable the bundled rabbitmq_prometheus plugin so observability/prometheus.yml
+    # can scrape rabbitmq:15692 with zero application code changes.
+    command: >
+      sh -c "rabbitmq-plugins enable --offline rabbitmq_prometheus
+      && rabbitmq-server"
     environment:
       RABBITMQ_DEFAULT_USER: northstar
       RABBITMQ_DEFAULT_PASS: northstar
     ports:
       - "5672:5672"
       - "15672:15672"
+      - "15692:15692"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
@@ -83,6 +89,8 @@ services:
     environment:
       MEILI_ENV: development
       MEILI_MASTER_KEY: northstar-meili-master-key
+      # Native Prometheus exporter on /metrics. Picked up by observability/prometheus.yml.
+      MEILI_EXPERIMENTAL_ENABLE_METRICS: "true"
     ports:
       - "7700:7700"
     volumes:

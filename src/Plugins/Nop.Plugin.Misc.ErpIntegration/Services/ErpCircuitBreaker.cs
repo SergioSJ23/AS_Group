@@ -33,6 +33,7 @@ public class ErpCircuitBreaker
                 if (_state == State.Open && DateTime.UtcNow - _openedAt >= BreakDuration)
                 {
                     _state = State.HalfOpen;
+                    ErpMetrics.RecordTransition("HALFOPEN");
                     _logger.LogInformation("ERP circuit breaker → HALF-OPEN (probe allowed)");
                     return false;
                 }
@@ -54,6 +55,7 @@ public class ErpCircuitBreaker
             {
                 _state = State.Closed;
                 _failures = 0;
+                ErpMetrics.RecordTransition("CLOSED");
                 _logger.LogInformation("ERP circuit breaker → CLOSED (probe succeeded)");
             }
             else if (_state == State.Closed)
@@ -70,8 +72,11 @@ public class ErpCircuitBreaker
             _failures++;
             if (_state == State.HalfOpen || _failures >= FailureThreshold)
             {
+                var wasAlreadyOpen = _state == State.Open;
                 _state = State.Open;
                 _openedAt = DateTime.UtcNow;
+                if (!wasAlreadyOpen)
+                    ErpMetrics.RecordTransition("OPEN");
                 _logger.LogWarning(
                     "ERP circuit breaker → OPEN after {Failures} failure(s). Cooldown: {Seconds}s",
                     _failures, BreakDuration.TotalSeconds);
