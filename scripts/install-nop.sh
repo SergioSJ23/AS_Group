@@ -341,6 +341,47 @@ activate_keycloak_method () {
     esac
 }
 
+install_outbox_plugin () {
+    local bu="$1"
+    local db_container="northstar-db_${bu}-1"
+    local db_name="nop_${bu}"
+
+    echo "==> ${bu}: installing Misc.OutboxRelay plugin"
+
+    # 1. Create the OutboxMessage table if it doesn't exist (nopCommerce migration
+    #    MigrationProcessType.Installation only runs via the admin UI install button,
+    #    so we ensure the schema is present before the plugin loads).
+    docker exec "$db_container" psql -U nop -d "$db_name" -c "
+        CREATE TABLE IF NOT EXISTS \"OutboxMessage\" (
+            \"Id\"          serial PRIMARY KEY,
+            \"BuId\"        varchar(50)  NOT NULL DEFAULT '',
+            \"EventType\"   varchar(200) NOT NULL DEFAULT '',
+            \"Payload\"     text         NOT NULL DEFAULT '',
+            \"CreatedAt\"   timestamp    NOT NULL DEFAULT now(),
+            \"PublishedAt\" timestamp    NULL
+        );" >/dev/null
+    echo "    OutboxMessage table ready"
+
+    # 2. Inject into plugins.json so nopCommerce loads and starts the relay service.
+    local plugins_file; plugins_file=$(mktemp)
+    docker cp "${db_container/db_/nop_}-1:/app/App_Data/plugins.json" "$plugins_file" 2>/dev/null || \
+    docker cp "northstar-nop_${bu}-1:/app/App_Data/plugins.json" "$plugins_file"
+    python3 - "$plugins_file" <<'PYEOF'
+import sys, json
+path = sys.argv[1]
+with open(path, 'rb') as f:
+    data = json.loads(f.read().decode('utf-8-sig'))
+names = [p['SystemName'] for p in data['InstalledPlugins']]
+if 'Misc.OutboxRelay' not in names:
+    data['InstalledPlugins'].append({'SystemName': 'Misc.OutboxRelay', 'Version': '1.00.0'})
+with open(path, 'w', encoding='utf-8') as f:
+    json.dump(data, f, indent=2)
+PYEOF
+    docker cp "$plugins_file" "northstar-nop_${bu}-1:/app/App_Data/plugins.json"
+    rm -f "$plugins_file"
+    echo "    plugins.json updated"
+}
+
 install_erp_plugin () {
     local bu="$1" host_port="$2"
     local base="http://localhost:${host_port}"
@@ -484,6 +525,8 @@ seed_bu_products bu2
 # Phase A: prepare + apply install for all plugins on both BUs.
 install_keycloak_plugin bu1 8081
 install_keycloak_plugin bu2 8082
+install_outbox_plugin bu1
+install_outbox_plugin bu2
 install_erp_plugin bu1 8081
 install_erp_plugin bu2 8082
 install_meilisearch_plugin bu1 8081
