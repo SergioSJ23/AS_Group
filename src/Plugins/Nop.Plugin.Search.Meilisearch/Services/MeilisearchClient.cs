@@ -27,14 +27,30 @@ public class MeilisearchClient : IMeilisearchClient
     {
         var index = _sdk.Index(MeilisearchDefaults.IndexName);
 
+        MeiliSdk.Index? info = null;
         try
         {
-            await index.FetchInfoAsync(ct);
+            info = await index.FetchInfoAsync(ct);
         }
         catch
         {
+            // Index doesn't exist — create it with the explicit primary key.
+        }
+
+        if (info == null)
+        {
             var task = await _sdk.CreateIndexAsync(MeilisearchDefaults.IndexName, primaryKey: "id", ct);
             await _sdk.WaitForTaskAsync(task.TaskUid, cancellationToken: ct);
+            index = _sdk.Index(MeilisearchDefaults.IndexName);
+        }
+        else if (info.PrimaryKey == null)
+        {
+            // Race condition: another BU created the index without a primaryKey.
+            // Delete and recreate so BulkIndexAsync can succeed.
+            var delTask = await _sdk.DeleteIndexAsync(MeilisearchDefaults.IndexName, ct);
+            await _sdk.WaitForTaskAsync(delTask.TaskUid, cancellationToken: ct);
+            var createTask = await _sdk.CreateIndexAsync(MeilisearchDefaults.IndexName, primaryKey: "id", ct);
+            await _sdk.WaitForTaskAsync(createTask.TaskUid, cancellationToken: ct);
             index = _sdk.Index(MeilisearchDefaults.IndexName);
         }
 

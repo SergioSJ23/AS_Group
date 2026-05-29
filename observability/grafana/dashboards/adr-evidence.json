@@ -7,9 +7,96 @@
   "links": [],
   "liveNow": false,
   "panels": [
+
     {
       "collapsed": false,
       "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 50,
+      "panels": [],
+      "title": "ADR-001 — Per-BU process and data isolation",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "reqps", "custom": {"lineWidth": 2}},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "BU1 (HomeStyle)"}, "properties": [{"id": "color", "value": {"fixedColor": "#5794F2", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "BU2 (WorkSpace)"}, "properties": [{"id": "color", "value": {"fixedColor": "#73BF69", "mode": "fixed"}}]}
+        ]
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 1},
+      "id": 51,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"expr": "sum(rate(http_server_request_duration_seconds_count{bu=\"bu1\"}[30s]))", "legendFormat": "BU1 (HomeStyle)", "refId": "A"},
+        {"expr": "sum(rate(http_server_request_duration_seconds_count{bu=\"bu2\"}[30s]))", "legendFormat": "BU2 (WorkSpace)", "refId": "B"}
+      ],
+      "title": "HTTP request rate per BU — proves independent operation",
+      "description": "Both BUs serve traffic independently. During the ADR-001 isolation demo (docker stop db_bu1), BU1 drops to 0 while BU2 continues unaffected.",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "reqps", "custom": {"lineWidth": 2}},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "BU1 5xx errors/s"}, "properties": [{"id": "color", "value": {"fixedColor": "#F2495C", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "BU2 5xx errors/s"}, "properties": [{"id": "color", "value": {"fixedColor": "#FF9830", "mode": "fixed"}}]}
+        ]
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 1},
+      "id": 52,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"expr": "sum(rate(http_server_request_duration_seconds_count{bu=\"bu1\", http_response_status_code=~\"5..\"}[30s]))", "legendFormat": "BU1 5xx errors/s", "refId": "A"},
+        {"expr": "sum(rate(http_server_request_duration_seconds_count{bu=\"bu2\", http_response_status_code=~\"5..\"}[30s]))", "legendFormat": "BU2 5xx errors/s", "refId": "B"}
+      ],
+      "title": "HTTP 5xx error rate per BU — isolation proof",
+      "description": "When BU1 DB is stopped, its error rate spikes. BU2 error rate stays flat — the failure is contained within BU1.",
+      "type": "timeseries"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 9},
+      "id": 60,
+      "panels": [],
+      "title": "ADR-002 — Group-wide SSO via Keycloak",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 10},
+      "id": 61,
+      "options": {"legend": {"displayMode": "list"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"expr": "sum by (realm) (rate(keycloak_logins_total[1m]))", "legendFormat": "{{realm}} logins/s", "refId": "A"},
+        {"expr": "sum by (realm) (rate(vendor_statistics_logins_total[1m]))", "legendFormat": "{{realm}} logins/s (alt)", "refId": "B"}
+      ],
+      "title": "SSO login rate by realm (Keycloak)",
+      "description": "SSO logins processed by the northstar Keycloak realm. Covers both BU1 and BU2 OIDC clients — one shared IdP, two autonomous tenants.",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 10},
+      "id": 62,
+      "options": {"legend": {"displayMode": "list"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"expr": "sum by (realm, error) (rate(keycloak_login_errors_total[1m]))", "legendFormat": "{{realm}} – {{error}}", "refId": "A"},
+        {"expr": "up{job=\"keycloak\"}", "legendFormat": "Keycloak up", "refId": "B"}
+      ],
+      "title": "SSO login errors + Keycloak availability",
+      "description": "Login errors per error type. The 'up' series confirms Keycloak is reachable and metrics are being scraped.",
+      "type": "timeseries"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 18},
       "id": 100,
       "panels": [],
       "title": "ADR-003 — Transactional outbox → RabbitMQ → CRM",
@@ -18,7 +105,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
-      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 1},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 19},
       "id": 1,
       "options": {"legend": {"displayMode": "list"}, "tooltip": {"mode": "multi"}},
       "targets": [
@@ -30,7 +117,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
-      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 1},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 19},
       "id": 2,
       "targets": [
         {"expr": "histogram_quantile(0.95, sum by (le) (rate(outbox_publish_latency_ms_milliseconds_bucket[1m])))", "legendFormat": "p95", "refId": "A"},
@@ -41,7 +128,7 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 1},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 19},
       "id": 3,
       "targets": [
         {"expr": "rate(outbox_published_total[1m])", "legendFormat": "{{bu}} published/s", "refId": "A"},
@@ -51,10 +138,26 @@
       "title": "Publish rate + RabbitMQ queue depth",
       "type": "timeseries"
     },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 24, "x": 0, "y": 27},
+      "id": 12,
+      "options": {"legend": {"displayMode": "list"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"expr": "rate(crm_messages_processed_total[1m])", "legendFormat": "{{bu}} processed/s", "refId": "A"},
+        {"expr": "rate(crm_messages_failed_total[1m])", "legendFormat": "failed → DLQ/s", "refId": "B"},
+        {"expr": "rate(crm_messages_duplicate_total[1m])", "legendFormat": "{{bu}} duplicates skipped/s", "refId": "C"},
+        {"expr": "rabbitmq_queue_messages{queue=\"northstar.crm.orders.dlq\"}", "legendFormat": "DLQ depth", "refId": "D"}
+      ],
+      "title": "CRM consumer — end-to-end async flow (ADR-003 completion)",
+      "description": "Shows the full pipeline: outbox (BU side) → RabbitMQ queue depth → CRM consumer processed/failed. During EspoCRM downtime, processed/s drops to 0 while RabbitMQ queue grows; on recovery the queue drains without losing messages.",
+      "type": "timeseries"
+    },
 
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 9},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 34},
       "id": 200,
       "panels": [],
       "title": "ADR-004 — ERP circuit breaker",
@@ -71,7 +174,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 10},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 35},
       "id": 4,
       "options": {"colorMode": "background"},
       "targets": [
@@ -82,7 +185,7 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 10},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 35},
       "id": 5,
       "targets": [
         {"expr": "increase(erp_breaker_transitions_total[5m])", "legendFormat": "{{bu}} → {{state}}", "refId": "A"}
@@ -93,7 +196,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
-      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 10},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 35},
       "id": 6,
       "targets": [
         {"expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(erp_call_duration_ms_milliseconds_bucket[1m])))", "legendFormat": "p95 {{outcome}}", "refId": "A"},
@@ -105,7 +208,7 @@
 
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 18},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 43},
       "id": 300,
       "panels": [],
       "title": "ADR-005 — Meilisearch with DB fallback",
@@ -114,7 +217,7 @@
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
-      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 19},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 44},
       "id": 7,
       "targets": [
         {"expr": "histogram_quantile(0.95, sum by (le, backend) (rate(search_duration_ms_milliseconds_bucket[1m])))", "legendFormat": "p95 backend={{backend}}", "refId": "A"},
@@ -125,7 +228,7 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 19},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 44},
       "id": 8,
       "targets": [
         {"expr": "rate(search_fallback_total[1m])", "legendFormat": "{{bu}} fallbacks/s", "refId": "A"}
@@ -135,7 +238,7 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 19},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 44},
       "id": 9,
       "targets": [
         {"expr": "meilisearch_is_indexing", "legendFormat": "meili indexing", "refId": "A"},
@@ -143,40 +246,8 @@
       ],
       "title": "Meilisearch native metrics",
       "type": "timeseries"
-    },
-
-    {
-      "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 27},
-      "id": 400,
-      "panels": [],
-      "title": "k6 load (remote-write)",
-      "type": "row"
-    },
-    {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
-      "id": 10,
-      "targets": [
-        {"expr": "rate(k6_http_reqs_total[30s])", "legendFormat": "{{scenario}} {{expected_response}}", "refId": "A"},
-        {"expr": "k6_vus", "legendFormat": "VUs", "refId": "B"}
-      ],
-      "title": "k6 request rate + VUs",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
-      "id": 11,
-      "targets": [
-        {"expr": "max by (scenario) (k6_http_req_duration_p95)", "legendFormat": "p95 {{scenario}}", "refId": "A"},
-        {"expr": "max by (scenario) (k6_http_req_duration_p50)", "legendFormat": "p50 {{scenario}}", "refId": "B"},
-        {"expr": "max by (scenario) (k6_http_req_duration_max)", "legendFormat": "max {{scenario}}", "refId": "C"}
-      ],
-      "title": "k6 request duration",
-      "type": "timeseries"
     }
+
   ],
   "refresh": "5s",
   "schemaVersion": 39,
@@ -187,6 +258,6 @@
   "timezone": "",
   "title": "Northstar — ADR Evidence",
   "uid": "northstar-adr-evidence",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

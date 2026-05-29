@@ -119,19 +119,36 @@ Per-BU isolation is enforced by environment variables (each BU only knows its ow
 
 ## 5. Running and verifying the assignment
 
-1. `docker compose up --build` and wait until all services report healthy.
-2. `./scripts/install-nop.sh` to seed both BUs, install the plugins, and wire the Keycloak / Meilisearch / ERP / RabbitMQ configuration. The script is idempotent.
-3. Run the smoke tests for each ADR (see table in §1). Each script prints a PASS/FAIL line per check.
+```bash
+# 1. Start the full federated stack + observability overlay
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up --build -d
+
+# 2. Seed both BUs, install plugins, wire Keycloak / Meilisearch / ERP / RabbitMQ settings
+./scripts/install-nop.sh
+
+# 3. Run the smoke tests for each ADR (each script prints PASS/FAIL per check)
+./scripts/test-isolation.sh
+./scripts/test-sso.sh
+./scripts/test-outbox.sh
+./scripts/test-erp-failure.sh && ./scripts/test-erp-recovery.sh
+./scripts/test-search.sh
+```
 
 URLs once the stack is up:
 
-- BU1 storefront: <http://localhost:8081>
-- BU2 storefront: <http://localhost:8082>
-- Keycloak admin: <http://localhost:8080> (admin / admin)
-- RabbitMQ management: <http://localhost:15672> (northstar / northstar)
-- Meilisearch: <http://localhost:7700>
-- EspoCRM: <http://localhost:8083> (admin / admin)
-- ERP stubs: <http://localhost:9001/health>, <http://localhost:9002/health>
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| **Group Portal** | <http://localhost:8000> | — |
+| BU1 storefront (HomeStyle) | <http://localhost:8081> | — |
+| BU2 storefront (WorkSpace) | <http://localhost:8082> | — |
+| Keycloak admin | <http://localhost:8080> | admin / admin |
+| RabbitMQ management | <http://localhost:15672> | northstar / northstar |
+| Meilisearch | <http://localhost:7700> | — |
+| EspoCRM | <http://localhost:8083> | admin / admin |
+| ERP stub BU1 | <http://localhost:9001/health> | — |
+| ERP stub BU2 | <http://localhost:9002/health> | — |
+| **Prometheus** | <http://localhost:9090> | — |
+| **Grafana (ADR evidence)** | <http://localhost:3000> | admin / admin |
 
 ---
 

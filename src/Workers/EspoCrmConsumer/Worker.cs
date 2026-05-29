@@ -89,18 +89,21 @@ public class Worker : BackgroundService
                 if (_processed.Contains(key))
                 {
                     _logger.LogDebug("Skipping duplicate {Key}", key);
+                    CrmConsumerMetrics.DuplicateTotal.Add(1, new KeyValuePair<string, object?>("bu", order.BuId));
                     await channel.BasicAckAsync(ea.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
                     return;
                 }
 
                 await _crmClient.ProcessOrderAsync(order, stoppingToken);
                 _processed.Add(key);
+                CrmConsumerMetrics.ProcessedTotal.Add(1, new KeyValuePair<string, object?>("bu", order.BuId));
                 await channel.BasicAckAsync(ea.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
                 _logger.LogInformation("Processed order {Key}", key);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to process message, routing to DLQ");
+                CrmConsumerMetrics.FailedTotal.Add(1);
                 await channel.BasicNackAsync(ea.DeliveryTag, multiple: false, requeue: false, cancellationToken: stoppingToken);
             }
         };

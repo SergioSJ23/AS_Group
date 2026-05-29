@@ -32,3 +32,17 @@ scrape_configs:
       - targets: ["nop_bu2:80"]
         labels:
           bu: bu2
+
+  # ADR-003: CRM consumer async relay — crm_messages_processed/failed/duplicate_total
+  - job_name: espocrm_consumer
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["espocrm_consumer:9003"]
+
+  # ADR-002: Keycloak SSO — keycloak_logins_total, keycloak_login_errors_total
+  # Requires KC_METRICS_ENABLED=true (set in docker-compose.yml).
+  # Management port 9000 is internal to the docker network; not exposed on the host.
+  - job_name: keycloak
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["keycloak:9000"]

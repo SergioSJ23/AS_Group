@@ -1,25 +1,32 @@
 using System.Text;
 using EspoCrmConsumer;
+using OpenTelemetry.Metrics;
 
-var host = Host.CreateDefaultBuilder(args)
-    .ConfigureServices((ctx, services) =>
-    {
-        var config = ctx.Configuration;
-        var espoCrmUrl = config["ESPOCRM_URL"] ?? "http://espocrm:80/";
-        var espoCrmUser = config["ESPOCRM_USER"] ?? "admin";
-        var espoCrmPass = config["ESPOCRM_PASS"] ?? "admin";
+var builder = WebApplication.CreateBuilder(args);
 
-        services.AddHttpClient("espocrm", client =>
-        {
-            client.BaseAddress = new Uri(espoCrmUrl.TrimEnd('/') + "/");
-            // EspoCRM v7+ uses Espo-Authorization for API authentication (not Authorization: Basic)
-            var credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{espoCrmUser}:{espoCrmPass}"));
-            client.DefaultRequestHeaders.Add("Espo-Authorization", credentials);
-        });
+var config = builder.Configuration;
+var espoCrmUrl = config["ESPOCRM_URL"] ?? "http://espocrm:80/";
+var espoCrmUser = config["ESPOCRM_USER"] ?? "admin";
+var espoCrmPass = config["ESPOCRM_PASS"] ?? "admin";
 
-        services.AddSingleton<EspoCrmClient>();
-        services.AddHostedService<Worker>();
-    })
-    .Build();
+builder.Services.AddHttpClient("espocrm", client =>
+{
+    client.BaseAddress = new Uri(espoCrmUrl.TrimEnd('/') + "/");
+    var credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{espoCrmUser}:{espoCrmPass}"));
+    client.DefaultRequestHeaders.Add("Espo-Authorization", credentials);
+});
 
-await host.RunAsync();
+builder.Services.AddSingleton<EspoCrmClient>();
+builder.Services.AddHostedService<Worker>();
+
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(metrics => metrics
+        .AddMeter(CrmConsumerMetrics.MeterName)
+        .AddPrometheusExporter());
+
+var app = builder.Build();
+
+// Prometheus scrape endpoint — picked up by observability/prometheus.yml
+app.MapPrometheusScrapingEndpoint();
+
+await app.RunAsync();

@@ -19,6 +19,7 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
       KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
     ports:
       - "8080:8080"
     volumes:
@@ -136,7 +137,7 @@ services:
     volumes:
       - espocrm_data:/var/www/html
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/api/v1/App/user"]
+      test: ["CMD", "curl", "-sf", "-u", "admin:admin", "http://localhost/api/v1/App/user"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -152,6 +153,10 @@ services:
       ESPOCRM_URL: http://espocrm:80/
       ESPOCRM_USER: admin
       ESPOCRM_PASS: admin
+      # Prometheus metrics endpoint — scraped by observability/prometheus.yml
+      ASPNETCORE_URLS: http://+:9003
+    ports:
+      - "9003:9003"
     depends_on:
       rabbitmq:
         condition: service_healthy
