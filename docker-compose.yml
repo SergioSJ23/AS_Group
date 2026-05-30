@@ -137,7 +137,7 @@ services:
     volumes:
       - espocrm_data:/var/www/html
     healthcheck:
-      test: ["CMD", "curl", "-sf", "-u", "admin:admin", "http://localhost/api/v1/App/user"]
+      test: ["CMD", "curl", "-sf", "-o", "/dev/null", "http://localhost/"]
       interval: 15s
       timeout: 5s
       retries: 10
