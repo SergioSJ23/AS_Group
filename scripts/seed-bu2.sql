@@ -6,14 +6,16 @@ DO $seed$
 DECLARE
     v_cat1  integer;
     v_cat2  integer;
+    v_cat3  integer;
+    v_cat4  integer;
     v_prod  integer;
 BEGIN
-    IF EXISTS (SELECT 1 FROM "Category" WHERE "Name" = 'Office Chairs' AND "Deleted" = false LIMIT 1) THEN
+    IF EXISTS (SELECT 1 FROM "Category" WHERE "Name" = 'Chairs' AND "Deleted" = false LIMIT 1) THEN
         RAISE NOTICE 'BU2 already seeded – skipping';
         RETURN;
     END IF;
 
-    -- ── Category: Office Chairs ─────────────────────────────────────────────
+    -- ── Category: Chairs ────────────────────────────────────────────────────
     INSERT INTO "Category" (
         "Name","Description","CategoryTemplateId",
         "MetaKeywords","MetaDescription","MetaTitle",
@@ -25,7 +27,7 @@ BEGIN
         "PriceRangeFiltering","PriceFrom","PriceTo","ManuallyPriceRange",
         "RestrictFromVendors"
     ) VALUES (
-        'Office Chairs','<p>Ergonomic seating engineered for long working sessions.</p>',1,
+        'Chairs','<p>Ergonomic seating engineered for long working sessions.</p>',1,
         NULL,NULL,NULL,
         0,0,
         6,true,'6, 3, 9',
@@ -35,11 +37,10 @@ BEGIN
         false,0,0,false,
         false
     ) RETURNING "Id" INTO v_cat1;
-
     INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
-    VALUES (v_cat1,'Category','office-chairs',true,0);
+    VALUES (v_cat1,'Category','chairs',true,0);
 
-    -- ── Category: Desks & Monitors ──────────────────────────────────────────
+    -- ── Category: Desks ─────────────────────────────────────────────────────
     INSERT INTO "Category" (
         "Name","Description","CategoryTemplateId",
         "MetaKeywords","MetaDescription","MetaTitle",
@@ -51,19 +52,68 @@ BEGIN
         "PriceRangeFiltering","PriceFrom","PriceTo","ManuallyPriceRange",
         "RestrictFromVendors"
     ) VALUES (
-        'Desks & Monitors','<p>Height-adjustable desks and professional-grade displays.</p>',1,
+        'Desks','<p>Height-adjustable desks for the modern workspace.</p>',1,
         NULL,NULL,NULL,
         0,0,
         6,true,'6, 3, 9',
-        false,false,false,
+        true,false,false,
         true,false,2,
         NOW(),NOW(),
         false,0,0,false,
         false
     ) RETURNING "Id" INTO v_cat2;
-
     INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
-    VALUES (v_cat2,'Category','desks-monitors',true,0);
+    VALUES (v_cat2,'Category','desks',true,0);
+
+    -- ── Category: Monitors ──────────────────────────────────────────────────
+    INSERT INTO "Category" (
+        "Name","Description","CategoryTemplateId",
+        "MetaKeywords","MetaDescription","MetaTitle",
+        "ParentCategoryId","PictureId",
+        "PageSize","AllowCustomersToSelectPageSize","PageSizeOptions",
+        "ShowOnHomepage","SubjectToAcl","LimitedToStores",
+        "Published","Deleted","DisplayOrder",
+        "CreatedOnUtc","UpdatedOnUtc",
+        "PriceRangeFiltering","PriceFrom","PriceTo","ManuallyPriceRange",
+        "RestrictFromVendors"
+    ) VALUES (
+        'Monitors','<p>Professional-grade displays for every workflow.</p>',1,
+        NULL,NULL,NULL,
+        0,0,
+        6,true,'6, 3, 9',
+        true,false,false,
+        true,false,3,
+        NOW(),NOW(),
+        false,0,0,false,
+        false
+    ) RETURNING "Id" INTO v_cat3;
+    INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
+    VALUES (v_cat3,'Category','monitors',true,0);
+
+    -- ── Category: Accessories ───────────────────────────────────────────────
+    INSERT INTO "Category" (
+        "Name","Description","CategoryTemplateId",
+        "MetaKeywords","MetaDescription","MetaTitle",
+        "ParentCategoryId","PictureId",
+        "PageSize","AllowCustomersToSelectPageSize","PageSizeOptions",
+        "ShowOnHomepage","SubjectToAcl","LimitedToStores",
+        "Published","Deleted","DisplayOrder",
+        "CreatedOnUtc","UpdatedOnUtc",
+        "PriceRangeFiltering","PriceFrom","PriceTo","ManuallyPriceRange",
+        "RestrictFromVendors"
+    ) VALUES (
+        'Accessories','<p>Everything you need to complete your workspace.</p>',1,
+        NULL,NULL,NULL,
+        0,0,
+        6,true,'6, 3, 9',
+        true,false,false,
+        true,false,4,
+        NOW(),NOW(),
+        false,0,0,false,
+        false
+    ) RETURNING "Id" INTO v_cat4;
+    INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
+    VALUES (v_cat4,'Category','accessories',true,0);
 
     -- ── Product 1: Ergonomic Mesh Chair ────────────────────────────────────
     INSERT INTO "Product" (
@@ -144,7 +194,6 @@ BEGIN
         NOW(),NOW(),
         false,0
     ) RETURNING "Id" INTO v_prod;
-
     INSERT INTO "Product_Category_Mapping" ("ProductId","CategoryId","IsFeaturedProduct","DisplayOrder")
     VALUES (v_prod,v_cat1,true,1);
     INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
@@ -229,7 +278,6 @@ BEGIN
         NOW(),NOW(),
         false,0
     ) RETURNING "Id" INTO v_prod;
-
     INSERT INTO "Product_Category_Mapping" ("ProductId","CategoryId","IsFeaturedProduct","DisplayOrder")
     VALUES (v_prod,v_cat2,true,1);
     INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
@@ -279,7 +327,7 @@ BEGIN
         '27" Ultrawide Monitor','QHD IPS panel, 144 Hz, USB-C 90W PD.',
         '<p>27-inch 2560×1440 IPS display with 144 Hz refresh, 1 ms GtG, USB-C 90W power delivery, and factory-calibrated colour accuracy (Delta E &lt; 2). Height and tilt adjustable stand included.</p>',
         NULL,
-        1,0,false,
+        1,0,true,
         NULL,NULL,NULL,
         true,0,0,0,0,
         false,false,
@@ -314,9 +362,8 @@ BEGIN
         NOW(),NOW(),
         false,0
     ) RETURNING "Id" INTO v_prod;
-
     INSERT INTO "Product_Category_Mapping" ("ProductId","CategoryId","IsFeaturedProduct","DisplayOrder")
-    VALUES (v_prod,v_cat2,false,2);
+    VALUES (v_prod,v_cat3,true,1);
     INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
     VALUES (v_prod,'Product','27-ultrawide-monitor',true,0);
 
@@ -364,7 +411,7 @@ BEGIN
         'Cable Management Kit','Under-desk tray, 10 velcro ties, 3 cable clips.',
         '<p>Complete desk tidy kit: aluminium under-desk cable tray (60 cm), 10 reusable velcro ties, 3 adhesive cable clips, and a power strip holder. Compatible with all WorkSpace desks.</p>',
         NULL,
-        1,0,false,
+        1,0,true,
         NULL,NULL,NULL,
         true,0,0,0,0,
         false,false,
@@ -399,11 +446,10 @@ BEGIN
         NOW(),NOW(),
         false,0
     ) RETURNING "Id" INTO v_prod;
-
     INSERT INTO "Product_Category_Mapping" ("ProductId","CategoryId","IsFeaturedProduct","DisplayOrder")
-    VALUES (v_prod,v_cat2,false,3);
+    VALUES (v_prod,v_cat4,true,1);
     INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
     VALUES (v_prod,'Product','cable-management-kit',true,0);
 
-    RAISE NOTICE 'WorkSpace (BU2) seed complete: 2 categories, 4 products';
+    RAISE NOTICE 'WorkSpace (BU2) seed complete: 4 categories, 4 products';
 END $seed$;

@@ -28,6 +28,16 @@ for c in northstar-db_bu1-1 northstar-db_bu2-1 northstar-nop_bu1-1 northstar-nop
 done
 echo "    all required containers running"
 
+# nopCommerce installer checks write permissions on wwwroot/images/uploaded.
+# The directory is bind-mounted from ./assets/images/bu{1,2} which may be owned
+# by the host user (non-root). Ensure the directory is world-writable so the
+# installer's ACL check passes regardless of ownership.
+echo "==> Fixing bind-mount permissions for installer ACL check"
+chmod -f 777 \
+    "${SCRIPT_DIR}/../assets/images/bu1" \
+    "${SCRIPT_DIR}/../assets/images/bu2" 2>/dev/null || true
+echo "    done"
+
 # Waits until a nopCommerce port responds with any HTTP status code (including 302
 # to /install). "Connection reset by peer" happens while Kestrel is still initialising;
 # we retry every 3 s for up to 3 minutes.
@@ -169,15 +179,19 @@ install_bu bu2 8082 db_bu2 nop_bu2
 # we don't kill the process while migrations are still running.
 wait_for_datasettings () {
     local container="$1" bu="$2"
-    echo "==> Waiting for ${bu} dataSettings.json to be written…"
+    echo "==> Waiting for ${bu} connection string to be written to appsettings.json…"
     for _ in $(seq 1 120); do
-        if docker exec "$container" test -f /app/App_Data/dataSettings.json 2>/dev/null; then
-            echo "    dataSettings.json found for ${bu}"
+        # nopCommerce 4.7+ writes the connection string into App_Data/appsettings.json
+        local cs
+        cs=$(docker exec "$container" \
+            sh -c 'cat /app/App_Data/appsettings.json 2>/dev/null | grep -o "\"ConnectionString\":[[:space:]]*\"[^\"]\+\"" | head -1' 2>/dev/null || true)
+        if [ -n "$cs" ] && [ "$cs" != *'""'* ]; then
+            echo "    connection string written for ${bu}"
             return 0
         fi
         sleep 2
     done
-    echo "FAIL: dataSettings.json never appeared for ${bu}"
+    echo "FAIL: connection string never appeared in appsettings.json for ${bu}"
     exit 1
 }
 
@@ -584,16 +598,16 @@ upload_product_images () {
     local entries=()
     if [ "$bu" = "bu1" ]; then
         entries=(
-            "linen-sofa.webp|HS-SOFA-001|linen-sofa"
+            "linen-sofa.jpg|HS-SOFA-001|linen-sofa"
             "walnut-coffee-table.jpg|HS-TABLE-001|walnut-coffee-table"
             "rattan-pendant-light.jpg|HS-LIGHT-001|rattan-pendant-light"
-            "marble-table-lamp.webp|HS-LIGHT-002|marble-table-lamp"
+            "marble-table-lamp.jpg|HS-LIGHT-002|marble-table-lamp"
         )
     else
         entries=(
             "ergonomic-mesh-chair.jpg|WS-CHAIR-001|ergonomic-mesh-chair"
             "adjustable-standing-desk.jpg|WS-DESK-001|adjustable-standing-desk"
-            "27-ultrawide-monitor.webp|WS-MON-001|27-ultrawide-monitor"
+            "27-ultrawide-monitor.jpg|WS-MON-001|27-ultrawide-monitor"
             "cable-management-kit.jpg|WS-ACC-001|cable-management-kit"
         )
     fi
@@ -670,6 +684,108 @@ activate_erp_widget bu2 8082
 # Phase D: upload product images via admin API so they are reproducible on any machine.
 upload_product_images bu1 8081
 upload_product_images bu2 8082
+
+# Phase E: post-upload DB fixups — assign category pictures + remove default slider banners.
+# Must run AFTER upload_product_images so the pic_ids exist.
+apply_visual_fixups () {
+    local bu="$1"
+    local db_container="northstar-db_${bu}-1"
+    local db_name="nop_${bu}"
+
+    echo "==> ${bu}: applying visual fixups (category pictures + slider removal)"
+
+    docker exec "$db_container" psql -U nop -d "$db_name" -v ON_ERROR_STOP=1 -c "
+    DO \$\$
+    BEGIN
+        -- ── Remove the default homepage slider (iPhone / Galaxy demo content) ──
+        UPDATE \"Setting\" SET \"Value\" = '[]'
+        WHERE \"Name\" = 'swipersettings.slides';
+
+        -- ── Assign each category its own product picture ──
+        -- Each category has exactly one product; use that product's uploaded picture.
+        UPDATE \"Category\" c
+        SET \"PictureId\" = ppm.\"PictureId\"
+        FROM \"Product_Category_Mapping\" pcm
+        JOIN \"Product_Picture_Mapping\" ppm ON ppm.\"ProductId\" = pcm.\"ProductId\"
+        WHERE pcm.\"CategoryId\" = c.\"Id\"
+          AND ppm.\"PictureId\" IS NOT NULL;
+
+        RAISE NOTICE 'Visual fixups done for this BU';
+    END \$\$;
+    " 2>&1 | grep -v "^psql\|^DO$"
+    echo "    done"
+}
+
+apply_visual_fixups bu1
+apply_visual_fixups bu2
+
+# Phase F: seed Meilisearch with all product fields including pictureUrls.
+# The BulkIndexAsync triggered by plugin install is unreliable on first boot;
+# this guarantees the portal at :8000 shows real products on every clean run.
+# pic_ids are always 3-6 (first 2 are system banners, then products in insert order).
+seed_meilisearch () {
+    local meili="${MEILI_URL:-http://localhost:7700}"
+    local key="${MEILI_KEY:-northstar-meili-master-key}"
+
+    echo "==> Seeding Meilisearch index (all 8 products + pictureUrls)"
+
+    # Ensure index + filterable attribute
+    curl -s -o /dev/null -X POST "${meili}/indexes" \
+        -H "Authorization: Bearer ${key}" -H "Content-Type: application/json" \
+        -d '{"uid":"products","primaryKey":"id"}' || true
+    curl -s -o /dev/null -X PATCH "${meili}/indexes/products/settings/filterable-attributes" \
+        -H "Authorization: Bearer ${key}" -H "Content-Type: application/json" \
+        -d '["buId"]'
+
+    curl -s -o /dev/null -X POST "${meili}/indexes/products/documents?primaryKey=id" \
+        -H "Authorization: Bearer ${key}" -H "Content-Type: application/json" \
+        -d '[
+          {"id":"bu1-1","productId":1,"buId":"bu1","name":"Linen Sofa","description":"Handcrafted 3-seater sofa with solid oak legs.","sku":"HS-SOFA-001","slug":"linen-sofa","price":1249.00,"pictureUrl":"http://localhost:8081/images/thumbs/0000003_linen-sofa_415.jpeg"},
+          {"id":"bu1-2","productId":2,"buId":"bu1","name":"Walnut Coffee Table","description":"Solid walnut top, 120x60 cm.","sku":"HS-TABLE-001","slug":"walnut-coffee-table","price":449.00,"pictureUrl":"http://localhost:8081/images/thumbs/0000004_walnut-coffee-table_415.jpeg"},
+          {"id":"bu1-3","productId":3,"buId":"bu1","name":"Rattan Pendant Light","description":"Handwoven rattan lamp, 40 cm diameter.","sku":"HS-LIGHT-001","slug":"rattan-pendant-light","price":129.00,"pictureUrl":"http://localhost:8081/images/thumbs/0000005_rattan-pendant-light_415.jpeg"},
+          {"id":"bu1-4","productId":4,"buId":"bu1","name":"Marble Table Lamp","description":"White Carrara marble base with a linen shade.","sku":"HS-LIGHT-002","slug":"marble-table-lamp","price":189.00,"pictureUrl":"http://localhost:8081/images/thumbs/0000006_marble-table-lamp_415.jpeg"},
+          {"id":"bu2-1","productId":1,"buId":"bu2","name":"Ergonomic Mesh Chair","description":"Full-mesh back, 4D armrests, lumbar support.","sku":"WS-CHAIR-001","slug":"ergonomic-mesh-chair","price":699.00,"pictureUrl":"http://localhost:8082/images/thumbs/0000003_ergonomic-mesh-chair_415.jpeg"},
+          {"id":"bu2-2","productId":2,"buId":"bu2","name":"Adjustable Standing Desk","description":"Electric sit-stand, 140x70 cm bamboo top.","sku":"WS-DESK-001","slug":"adjustable-standing-desk","price":849.00,"pictureUrl":"http://localhost:8082/images/thumbs/0000004_adjustable-standing-desk_415.jpeg"},
+          {"id":"bu2-3","productId":3,"buId":"bu2","name":"27\" Ultrawide Monitor","description":"QHD IPS panel, 144 Hz, USB-C 90W PD.","sku":"WS-MON-001","slug":"27-ultrawide-monitor","price":549.00,"pictureUrl":"http://localhost:8082/images/thumbs/0000005_27-ultrawide-monitor_415.jpeg"},
+          {"id":"bu2-4","productId":4,"buId":"bu2","name":"Cable Management Kit","description":"Under-desk tray, 10 velcro ties, 3 cable clips.","sku":"WS-ACC-001","slug":"cable-management-kit","price":39.00,"pictureUrl":"http://localhost:8082/images/thumbs/0000006_cable-management-kit_415.jpeg"}
+        ]'
+
+    echo "    8 documents upserted"
+
+    # apply_visual_fixups wrote to the DB but nopCommerce caches settings in memory.
+    # Restart so the slider change and category picture assignments take effect immediately.
+    echo "    restarting nop containers to flush settings cache..."
+    docker compose restart nop_bu1 nop_bu2 >/dev/null
+    for port in 8081 8082; do
+        for _ in $(seq 1 60); do
+            [ "$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:${port}/" 2>/dev/null)" = "200" ] && break
+            sleep 2
+        done
+    done
+
+    # Trigger thumbnail generation at all sizes used by the UI:
+    #   _550 → product detail page
+    #   _415 → category listing page
+    #   _450 → homepage category grid
+    echo "    warming thumbnail cache (_415/_450/_550)..."
+    for slug in linen-sofa walnut-coffee-table rattan-pendant-light marble-table-lamp; do
+        curl -s -o /dev/null "http://localhost:8081/${slug}"
+    done
+    for slug in furniture lighting; do
+        curl -s -o /dev/null "http://localhost:8081/${slug}"
+    done
+    curl -s -o /dev/null "http://localhost:8081/"
+    for slug in ergonomic-mesh-chair adjustable-standing-desk 27-ultrawide-monitor cable-management-kit; do
+        curl -s -o /dev/null "http://localhost:8082/${slug}"
+    done
+    for slug in office-chairs desks-monitors; do
+        curl -s -o /dev/null "http://localhost:8082/${slug}"
+    done
+    curl -s -o /dev/null "http://localhost:8082/"
+    echo "    done"
+}
+
+seed_meilisearch
 
 echo
 echo "nopCommerce installed for BU1 and BU2."

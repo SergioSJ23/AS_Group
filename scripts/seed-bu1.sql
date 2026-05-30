@@ -6,14 +6,16 @@ DO $seed$
 DECLARE
     v_cat1  integer;
     v_cat2  integer;
+    v_cat3  integer;
+    v_cat4  integer;
     v_prod  integer;
 BEGIN
-    IF EXISTS (SELECT 1 FROM "Category" WHERE "Name" = 'Furniture' AND "Deleted" = false LIMIT 1) THEN
+    IF EXISTS (SELECT 1 FROM "Category" WHERE "Name" = 'Sofas' AND "Deleted" = false LIMIT 1) THEN
         RAISE NOTICE 'BU1 already seeded – skipping';
         RETURN;
     END IF;
 
-    -- ── Category: Furniture ─────────────────────────────────────────────────
+    -- ── Category: Sofas ─────────────────────────────────────────────────────
     INSERT INTO "Category" (
         "Name","Description","CategoryTemplateId",
         "MetaKeywords","MetaDescription","MetaTitle",
@@ -25,7 +27,7 @@ BEGIN
         "PriceRangeFiltering","PriceFrom","PriceTo","ManuallyPriceRange",
         "RestrictFromVendors"
     ) VALUES (
-        'Furniture','<p>Handcrafted furniture for a warm, inviting home.</p>',1,
+        'Sofas','<p>Handcrafted sofas for a warm, inviting home.</p>',1,
         NULL,NULL,NULL,
         0,0,
         6,true,'6, 3, 9',
@@ -35,11 +37,10 @@ BEGIN
         false,0,0,false,
         false
     ) RETURNING "Id" INTO v_cat1;
-
     INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
-    VALUES (v_cat1,'Category','furniture',true,0);
+    VALUES (v_cat1,'Category','sofas',true,0);
 
-    -- ── Category: Lighting ──────────────────────────────────────────────────
+    -- ── Category: Tables ────────────────────────────────────────────────────
     INSERT INTO "Category" (
         "Name","Description","CategoryTemplateId",
         "MetaKeywords","MetaDescription","MetaTitle",
@@ -51,19 +52,68 @@ BEGIN
         "PriceRangeFiltering","PriceFrom","PriceTo","ManuallyPriceRange",
         "RestrictFromVendors"
     ) VALUES (
-        'Lighting','<p>Illuminate your space with our curated lighting collection.</p>',1,
+        'Tables','<p>Solid wood tables crafted to last a lifetime.</p>',1,
         NULL,NULL,NULL,
         0,0,
         6,true,'6, 3, 9',
-        false,false,false,
+        true,false,false,
         true,false,2,
         NOW(),NOW(),
         false,0,0,false,
         false
     ) RETURNING "Id" INTO v_cat2;
-
     INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
-    VALUES (v_cat2,'Category','lighting',true,0);
+    VALUES (v_cat2,'Category','tables',true,0);
+
+    -- ── Category: Pendant Lights ────────────────────────────────────────────
+    INSERT INTO "Category" (
+        "Name","Description","CategoryTemplateId",
+        "MetaKeywords","MetaDescription","MetaTitle",
+        "ParentCategoryId","PictureId",
+        "PageSize","AllowCustomersToSelectPageSize","PageSizeOptions",
+        "ShowOnHomepage","SubjectToAcl","LimitedToStores",
+        "Published","Deleted","DisplayOrder",
+        "CreatedOnUtc","UpdatedOnUtc",
+        "PriceRangeFiltering","PriceFrom","PriceTo","ManuallyPriceRange",
+        "RestrictFromVendors"
+    ) VALUES (
+        'Pendant Lights','<p>Statement pendant lights for every room.</p>',1,
+        NULL,NULL,NULL,
+        0,0,
+        6,true,'6, 3, 9',
+        true,false,false,
+        true,false,3,
+        NOW(),NOW(),
+        false,0,0,false,
+        false
+    ) RETURNING "Id" INTO v_cat3;
+    INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
+    VALUES (v_cat3,'Category','pendant-lights',true,0);
+
+    -- ── Category: Table Lamps ───────────────────────────────────────────────
+    INSERT INTO "Category" (
+        "Name","Description","CategoryTemplateId",
+        "MetaKeywords","MetaDescription","MetaTitle",
+        "ParentCategoryId","PictureId",
+        "PageSize","AllowCustomersToSelectPageSize","PageSizeOptions",
+        "ShowOnHomepage","SubjectToAcl","LimitedToStores",
+        "Published","Deleted","DisplayOrder",
+        "CreatedOnUtc","UpdatedOnUtc",
+        "PriceRangeFiltering","PriceFrom","PriceTo","ManuallyPriceRange",
+        "RestrictFromVendors"
+    ) VALUES (
+        'Table Lamps','<p>Elegant table lamps to set the mood.</p>',1,
+        NULL,NULL,NULL,
+        0,0,
+        6,true,'6, 3, 9',
+        true,false,false,
+        true,false,4,
+        NOW(),NOW(),
+        false,0,0,false,
+        false
+    ) RETURNING "Id" INTO v_cat4;
+    INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
+    VALUES (v_cat4,'Category','table-lamps',true,0);
 
     -- ── Product 1: Linen Sofa ───────────────────────────────────────────────
     INSERT INTO "Product" (
@@ -144,7 +194,6 @@ BEGIN
         NOW(),NOW(),
         false,0
     ) RETURNING "Id" INTO v_prod;
-
     INSERT INTO "Product_Category_Mapping" ("ProductId","CategoryId","IsFeaturedProduct","DisplayOrder")
     VALUES (v_prod,v_cat1,true,1);
     INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
@@ -194,7 +243,7 @@ BEGIN
         'Walnut Coffee Table','Solid walnut top, 120 × 60 cm.',
         '<p>Hand-oiled solid walnut with hairpin steel legs. Pairs beautifully with the Linen Sofa.</p>',
         NULL,
-        1,0,false,
+        1,0,true,
         NULL,NULL,NULL,
         true,0,0,0,0,
         false,false,
@@ -229,9 +278,8 @@ BEGIN
         NOW(),NOW(),
         false,0
     ) RETURNING "Id" INTO v_prod;
-
     INSERT INTO "Product_Category_Mapping" ("ProductId","CategoryId","IsFeaturedProduct","DisplayOrder")
-    VALUES (v_prod,v_cat1,false,2);
+    VALUES (v_prod,v_cat2,true,1);
     INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
     VALUES (v_prod,'Product','walnut-coffee-table',true,0);
 
@@ -279,7 +327,7 @@ BEGIN
         'Rattan Pendant Light','Handwoven rattan lamp, 40 cm diameter.',
         '<p>Natural rattan weave with a warm Edison-style bulb socket. Creates beautiful dappled light patterns.</p>',
         NULL,
-        1,0,false,
+        1,0,true,
         NULL,NULL,NULL,
         true,0,0,0,0,
         false,false,
@@ -314,9 +362,8 @@ BEGIN
         NOW(),NOW(),
         false,0
     ) RETURNING "Id" INTO v_prod;
-
     INSERT INTO "Product_Category_Mapping" ("ProductId","CategoryId","IsFeaturedProduct","DisplayOrder")
-    VALUES (v_prod,v_cat2,true,1);
+    VALUES (v_prod,v_cat3,true,1);
     INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
     VALUES (v_prod,'Product','rattan-pendant-light',true,0);
 
@@ -364,7 +411,7 @@ BEGIN
         'Marble Table Lamp','White Carrara marble base with a linen shade.',
         '<p>Elegant Carrara marble base paired with a hand-stitched natural linen shade. E27 socket, 40 W max.</p>',
         NULL,
-        1,0,false,
+        1,0,true,
         NULL,NULL,NULL,
         true,0,0,0,0,
         false,false,
@@ -399,11 +446,10 @@ BEGIN
         NOW(),NOW(),
         false,0
     ) RETURNING "Id" INTO v_prod;
-
     INSERT INTO "Product_Category_Mapping" ("ProductId","CategoryId","IsFeaturedProduct","DisplayOrder")
-    VALUES (v_prod,v_cat2,false,2);
+    VALUES (v_prod,v_cat4,true,1);
     INSERT INTO "UrlRecord" ("EntityId","EntityName","Slug","IsActive","LanguageId")
     VALUES (v_prod,'Product','marble-table-lamp',true,0);
 
-    RAISE NOTICE 'HomeStyle (BU1) seed complete: 2 categories, 4 products';
+    RAISE NOTICE 'HomeStyle (BU1) seed complete: 4 categories, 4 products';
 END $seed$;
