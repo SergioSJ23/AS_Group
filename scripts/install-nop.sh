@@ -164,8 +164,26 @@ install_bu () {
 install_bu bu1 8081 db_bu1 nop_bu1
 install_bu bu2 8082 db_bu2 nop_bu2
 
-# nopCommerce's in-process "restart host" doesn't reliably reload appsettings in Docker,
-# so force a container restart to make both BUs pick up their new connection strings.
+# nopCommerce writes dataSettings.json asynchronously after the installer POST,
+# then calls StopApplication(). Wait for the file to appear before restarting so
+# we don't kill the process while migrations are still running.
+wait_for_datasettings () {
+    local container="$1" bu="$2"
+    echo "==> Waiting for ${bu} dataSettings.json to be written…"
+    for _ in $(seq 1 120); do
+        if docker exec "$container" test -f /app/App_Data/dataSettings.json 2>/dev/null; then
+            echo "    dataSettings.json found for ${bu}"
+            return 0
+        fi
+        sleep 2
+    done
+    echo "FAIL: dataSettings.json never appeared for ${bu}"
+    exit 1
+}
+
+wait_for_datasettings northstar-nop_bu1-1 bu1
+wait_for_datasettings northstar-nop_bu2-1 bu2
+
 echo
 echo "==> Restarting nop containers so appsettings.json is reloaded"
 docker compose restart nop_bu1 nop_bu2 >/dev/null
