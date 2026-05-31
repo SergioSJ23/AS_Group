@@ -19,7 +19,7 @@ set -euo pipefail
 ts() { date +'%H:%M:%S'; }
 banner() { echo; echo "[$(ts)] ───── $* ─────"; }
 
-N="${N:-50}"
+N="${N:-100}"
 BU="${BU:-bu1}"
 DB_CONTAINER="northstar-db_${BU}-1"
 DB_NAME="nop_${BU}"
@@ -61,8 +61,8 @@ banner "Waiting 15s for OutboxRelayService to pick them up (polls every 5s)"
 sleep 15
 echo "  rabbitmq_queue_messages{northstar.crm.orders} = $(queue_depth)  (expected ≈ $N)"
 
-banner "Holding the outage for 20s so the dashboard panel shows the plateau"
-for i in 1 2 3 4; do
+banner "Holding the outage for 60s so the dashboard panel shows a clear plateau"
+for i in $(seq 1 12); do
   sleep 5
   echo "  [$(ts)] queue depth = $(queue_depth)"
 done
@@ -70,8 +70,8 @@ done
 banner "Unpausing espocrm_consumer — queue should drain"
 docker unpause "$CONSUMER_CONTAINER"
 
-banner "Watching queue drain for 30s"
-for i in 1 2 3 4 5 6; do
+banner "Watching queue drain for 60s"
+for i in $(seq 1 12); do
   sleep 5
   echo "  [$(ts)] queue depth = $(queue_depth)"
 done

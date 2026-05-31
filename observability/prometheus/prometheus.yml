@@ -13,6 +13,11 @@ scrape_configs:
     static_configs:
       - targets: ["rabbitmq:15692"]
 
+  - job_name: rabbitmq_per_queue
+    metrics_path: /metrics/per-object
+    static_configs:
+      - targets: ["rabbitmq:15692"]
+
   - job_name: meilisearch
     metrics_path: /metrics
     # Meilisearch enforces the master key on /metrics when MEILI_MASTER_KEY is set
