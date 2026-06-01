@@ -24,9 +24,28 @@ public class EspoCrmClient
         var notes = $"[{order.BuId}] Order #{order.OrderId} | Total: {order.OrderTotal:F2} | {order.Timestamp:u}";
 
         if (contactId != null)
-            await UpdateContactAsync(contactId, notes, ct);
+        {
+            // Accumulate the cross-BU purchase history on the shared contact instead of
+            // overwriting it, so one customer's orders from every BU stay visible on a single profile.
+            var existing = await GetContactDescriptionAsync(contactId, ct);
+            var combined = string.IsNullOrEmpty(existing) ? notes : existing + "\n" + notes;
+            await UpdateContactAsync(contactId, combined, ct);
+        }
         else
+        {
             await CreateContactAsync(order, notes, ct);
+        }
+    }
+
+    private async Task<string?> GetContactDescriptionAsync(string contactId, CancellationToken ct)
+    {
+        var resp = await _http.GetAsync($"api/v1/Contact/{contactId}", ct);
+        if (!resp.IsSuccessStatusCode) return null;
+
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        return doc.RootElement.TryGetProperty("description", out var d) && d.ValueKind == JsonValueKind.String
+            ? d.GetString()
+            : null;
     }
 
     private async Task<string?> FindContactByEmailAsync(string email, CancellationToken ct)
