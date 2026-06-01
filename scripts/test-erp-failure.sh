@@ -9,6 +9,8 @@ TEST_SKU="DEMO-SKU-001"
 echo "=== ADR-004 Circuit Breaker — Failure Demo ==="
 echo
 
+PRODUCT_SLUGS=("adjustable-standing-desk" "ergonomic-mesh-chair" "27-ultrawide-monitor" "cable-management-kit")
+
 echo "1. Verifying both ERPs healthy..."
 curl -sf "$ERP_BU1/health" | python3 -m json.tool
 curl -sf "$ERP_BU2/health" | python3 -m json.tool
@@ -16,6 +18,17 @@ curl -sf "$ERP_BU2/health" | python3 -m json.tool
 echo
 echo "2. Live stock from BU2 ERP (circuit CLOSED)..."
 curl -sf "$ERP_BU2/stock/$TEST_SKU" | python3 -m json.tool
+
+echo
+echo "2b. Warming up p95 live samples (10 product page requests while ERP healthy)..."
+for i in $(seq 1 10); do
+  slug="${PRODUCT_SLUGS[$((( i - 1 ) % ${#PRODUCT_SLUGS[@]}))]}"
+  curl -s -o /dev/null "$BU2_URL/$slug"
+  echo -n "."
+done
+echo " done"
+echo "    Waiting 15s for Prometheus to scrape the healthy samples..."
+sleep 15
 
 echo
 echo "3. Breaking BU2 ERP..."
@@ -40,9 +53,13 @@ echo "   BU1 is unaffected ✓"
 
 echo
 echo "6. Triggering circuit breaker in nopCommerce BU2 (need 5 failures)..."
-echo "   Requesting BU2 product pages to accumulate failures..."
-for i in $(seq 1 6); do
-  curl -sf "$BU2_URL/" -o /dev/null -w "   Request $i: HTTP %{http_code}\n" || true
+echo "   Requesting BU2 product detail pages to accumulate ERP failures..."
+i=1
+for slug in "${PRODUCT_SLUGS[@]}" "${PRODUCT_SLUGS[@]}"; do
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BU2_URL/$slug")
+  echo "   Request $i ($slug): HTTP $STATUS"
+  i=$((i+1))
+  [ $i -gt 7 ] && break
 done
 
 echo

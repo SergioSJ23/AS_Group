@@ -484,14 +484,19 @@
       "id": 6,
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(erp_call_duration_ms_milliseconds_bucket[1m])))",
-          "legendFormat": "p95 {{outcome}}",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(erp_call_duration_ms_milliseconds_bucket{outcome=\"live\"}[1m])))",
+          "legendFormat": "p95 live",
           "refId": "A"
         },
         {
-          "expr": "rate(erp_cache_serve_total[1m])",
-          "legendFormat": "cache serves/s ({{reason}})",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(erp_call_duration_ms_milliseconds_bucket{outcome=\"short-circuit-cache\"}[1m])))",
+          "legendFormat": "p95 short-circuit-cache",
           "refId": "B"
+        },
+        {
+          "expr": "rate(erp_cache_serve_total{reason=\"breaker-open\"}[1m])",
+          "legendFormat": "cache serves/s (breaker-open)",
+          "refId": "C"
         }
       ],
       "title": "ERP call duration p95 + cache fallback rate",

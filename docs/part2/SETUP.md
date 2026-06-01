@@ -12,16 +12,21 @@
 
 ---
 
-## Quick Start (one command)
+## Quick Start
 
 ```bash
 cd /path/to/AS_Group
+
+# Step 1 — start all containers (builds images on first run)
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+
+# Step 2 — wait ~30s for healthchecks, then install and seed
 ./scripts/install-nop.sh
 ```
 
-This script:
-1. Pulls and builds all images
-2. Starts all 15 containers and waits for healthchecks
+`install-nop.sh`:
+1. Waits for both storefronts to accept HTTP
+2. Runs the nopCommerce install wizard for BU1 and BU2
 3. Seeds BU1 and BU2 product catalogs
 4. Installs and configures all plugins
 5. Indexes products into Meilisearch
@@ -97,8 +102,8 @@ showing a credential prompt.
 
 ```bash
 ./scripts/demo-breaker.sh
-# Runs k6 load in background → breaks BU2 ERP → watches circuit open →
-# observes BU2 storefront stays 200 with cached stock → recovers ERP →
+# Runs k6 load in background → breaks BU1 ERP → watches circuit open →
+# observes BU1 storefront stays 200 with cached stock → recovers ERP →
 # watches circuit close. Watch Grafana row "ADR-004".
 ```
 

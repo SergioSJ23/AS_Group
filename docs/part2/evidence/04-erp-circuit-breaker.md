@@ -163,8 +163,8 @@ Circuit breaker state transitions and ERP call durations are tracked as OpenTele
 metrics exported to Prometheus:
 
 ```
-erp_circuit_state        gauge   0=CLOSED, 1=HALF_OPEN, 2=OPEN  (tagged: buId)
-erp_circuit_transitions  counter transitions total               (tagged: buId, from, to)
+erp_breaker_state             gauge   0=CLOSED, 1=HALF_OPEN, 2=OPEN  (tagged: buId)
+erp_breaker_transitions_total counter transitions total               (tagged: buId, from, to)
 erp_call_duration_ms     histogram ERP HTTP call latency         (tagged: buId, outcome=live|cache)
 ```
 

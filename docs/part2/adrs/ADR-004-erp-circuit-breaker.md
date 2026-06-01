@@ -59,8 +59,8 @@ Plugin: `src/Plugins/Nop.Plugin.Misc.ErpIntegration/`
 Worker (stub): `src/Workers/ErpStub/`
 
 **Circuit breaker** (`ErpCircuitBreaker.cs`): singleton per BU process, thread-safe via
-lock. Transitions tracked as OpenTelemetry metrics (`erp_circuit_state`,
-`erp_circuit_transitions`).
+lock. Transitions tracked as OpenTelemetry metrics (`erp_breaker_state`,
+`erp_breaker_transitions_total`).
 
 **Cache:** `IStaticCacheManager`, key `erp.stock.{sku}`, TTL 5 min.
 
