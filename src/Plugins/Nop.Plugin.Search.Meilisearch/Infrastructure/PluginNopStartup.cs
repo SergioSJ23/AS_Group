@@ -49,6 +49,9 @@ public class PluginNopStartup : INopStartup
             sp.GetRequiredService<ILogger<MeilisearchIndexer>>()));
 
         services.AddScoped<IFallbackSignal, FallbackSignal>();
+
+        // Auto-resync the index after a Meilisearch outage (QA4: resync within 5 minutes of recovery).
+        services.AddHostedService<MeilisearchResyncService>();
     }
 
     public void Configure(IApplicationBuilder application) { }

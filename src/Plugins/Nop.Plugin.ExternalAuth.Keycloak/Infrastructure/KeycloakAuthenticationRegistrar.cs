@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Nop.Core.Infrastructure;
@@ -25,6 +26,12 @@ public class KeycloakAuthenticationRegistrar : IExternalAuthenticationRegistrar
             var clientSecret = FirstNonEmpty(
                 settings?.ClientSecret,
                 Environment.GetEnvironmentVariable("KEYCLOAK_CLIENT_SECRET"));
+
+            // This BU's identifier, used to namespace local role IDs so a role mapped in one BU
+            // can never collide with — or be mistaken for — a role in another BU (Part 1 §6.3,
+            // "Local role IDs are prefixed with the BU name to prevent collision across BUs").
+            var buId = FirstNonEmpty(
+                Environment.GetEnvironmentVariable("BU_ID")) ?? "bu";
 
             options.Authority = string.IsNullOrEmpty(authority)
                 ? "https://placeholder-not-configured"
@@ -70,6 +77,27 @@ public class KeycloakAuthenticationRegistrar : IExternalAuthenticationRegistrar
                     context.HandleResponse();
                     var errorUrl = context.Properties?.GetString(KeycloakAuthenticationDefaults.ErrorCallback) ?? "/";
                     context.Response.Redirect(errorUrl);
+                    return Task.CompletedTask;
+                },
+
+                // Map the BU-scoped role claims into local, BU-prefixed roles.
+                //
+                // The Keycloak client for this BU emits a per-client role mapper into the
+                // "bu_roles" claim that contains ONLY this client's roles. Roles assigned to the
+                // same user for the *other* BU's client are not in this token at all, so reading
+                // "bu_roles" here cannot leak another BU's roles — the isolation is structural,
+                // enforced at the token boundary, not by filtering after the fact.
+                OnTokenValidated = context =>
+                {
+                    if (context.Principal?.Identity is ClaimsIdentity identity)
+                    {
+                        foreach (var roleClaim in context.Principal.FindAll("bu_roles").ToList())
+                        {
+                            var localRole = $"{buId}:{roleClaim.Value}";
+                            if (!identity.HasClaim(identity.RoleClaimType, localRole))
+                                identity.AddClaim(new Claim(identity.RoleClaimType, localRole));
+                        }
+                    }
                     return Task.CompletedTask;
                 }
             };

@@ -13,6 +13,24 @@
       "path": "/verified-customer"
     }
   ],
+  "roles": {
+    "client": {
+      "bu1-nopcommerce": [
+        {
+          "name": "HomeStyle-VIP",
+          "description": "BU1-only customer role (HomeStyle premium B2C)",
+          "clientRole": true
+        }
+      ],
+      "bu2-nopcommerce": [
+        {
+          "name": "WorkSpace-Wholesale",
+          "description": "BU2-only customer role (WorkSpace B2B wholesale)",
+          "clientRole": true
+        }
+      ]
+    }
+  },
   "clients": [
     {
       "clientId": "bu1-nopcommerce",
@@ -33,7 +51,24 @@
       ],
       "attributes": {
         "post.logout.redirect.uris": "http://bu1.localtest.me:8081/*"
-      }
+      },
+      "protocolMappers": [
+        {
+          "name": "bu-client-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "bu_roles",
+            "jsonType.label": "String",
+            "usermodel.clientRoleMapping.clientId": "bu1-nopcommerce",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
     },
     {
       "clientId": "bu2-nopcommerce",
@@ -54,7 +89,24 @@
       ],
       "attributes": {
         "post.logout.redirect.uris": "http://bu2.localtest.me:8082/*"
-      }
+      },
+      "protocolMappers": [
+        {
+          "name": "bu-client-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "bu_roles",
+            "jsonType.label": "String",
+            "usermodel.clientRoleMapping.clientId": "bu2-nopcommerce",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -66,6 +118,10 @@
       "enabled": true,
       "emailVerified": true,
       "groups": ["/verified-customer"],
+      "clientRoles": {
+        "bu1-nopcommerce": ["HomeStyle-VIP"],
+        "bu2-nopcommerce": ["WorkSpace-Wholesale"]
+      },
       "credentials": [
         {
           "type": "password",

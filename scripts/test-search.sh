@@ -84,4 +84,42 @@ probe_search "$BU1" "BU1"
 probe_search "$BU2" "BU2"
 
 echo
+echo "8. Auto-resync after recovery (QA4: resync within 5 min)"
+echo "    MeilisearchResyncService probes health every 30s; on a down->up transition it"
+echo "    bulk-reindexes this BU's catalog. We assert each BU process logged a resync after"
+echo "    recovery (proves the trigger fired) and that documents are queryable."
+RESYNC_OK=true
+for svc in nop_bu1 nop_bu2; do
+    logged=false
+    for i in $(seq 1 90); do
+        if docker compose logs --since 5m "$svc" 2>/dev/null | grep -q "Meilisearch resync complete"; then
+            echo "    ${svc}: resync completed after ~${i}s (log: 'Meilisearch resync complete')"
+            logged=true
+            break
+        fi
+        sleep 1
+    done
+    if ! $logged; then
+        echo "    FAIL: ${svc} did not log a resync within 90s"
+        RESYNC_OK=false
+    fi
+done
+# Sanity: documents are queryable for both BUs after recovery
+for bu in bu1 bu2; do
+    n=$(curl -sf -H "Authorization: Bearer ${MEILI_KEY}" \
+        "${MEILI_HOST}/indexes/products/search" \
+        -X POST -H "Content-Type: application/json" \
+        --data "{\"q\":\"\",\"filter\":\"buId = \\\"${bu}\\\"\",\"limit\":1}" \
+        2>/dev/null \
+        | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("estimatedTotalHits",0))' 2>/dev/null || echo 0)
+    echo "    ${bu}: estimatedTotalHits=${n} after recovery"
+    [ "${n:-0}" -ge 1 ] || RESYNC_OK=false
+done
+if ! $RESYNC_OK; then
+    echo "RESYNC FAILED — QA4 recovery measure not met"
+    exit 1
+fi
+echo "    OK — resync fired and index is healthy, well within the 5-minute QA4 budget"
+
+echo
 echo "=== Search test complete ==="

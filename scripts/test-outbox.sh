@@ -21,7 +21,8 @@ TEST_EMAIL="outbox-test-$(date +%s)@northstar.test"
 TEST_ORDER_ID=$((RANDOM + 90000))
 TEST_CUSTOMER_ID=$((RANDOM + 50000))
 BU_ID="bu2"
-TIMEOUT=35
+# QA5 response measure: CRM updated within 30s under normal conditions.
+TIMEOUT=30
 
 # ── 1. Verify espocrm_consumer is running ────────────────────────────────────
 echo "==> 1. Checking espocrm_consumer container..."
@@ -56,6 +57,7 @@ fi
 # ── 3. Wait for consumer to process ─────────────────────────────────────────
 echo "==> 3. Waiting up to ${TIMEOUT}s for EspoCRM contact to appear..."
 FOUND=false
+ELAPSED=0
 for i in $(seq 1 "$TIMEOUT"); do
     ENCODED=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$TEST_EMAIL")
     RESPONSE=$(curl -s -u "${ESPOCRM_USER}:${ESPOCRM_PASS}" \
@@ -64,6 +66,7 @@ for i in $(seq 1 "$TIMEOUT"); do
     TOTAL=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('total',0))" 2>/dev/null || echo 0)
     if [[ "$TOTAL" -ge 1 ]]; then
         FOUND=true
+        ELAPSED=$i
         break
     fi
     printf "    [%2ds] contact not yet visible...\r" "$i"
@@ -72,18 +75,15 @@ done
 echo ""
 
 if $FOUND; then
-    echo "PASS: EspoCRM contact for ${TEST_EMAIL} created within ${TIMEOUT}s."
+    echo "PASS: EspoCRM contact for ${TEST_EMAIL} created in ${ELAPSED}s (within the ${TIMEOUT}s QA5 SLA)."
 else
     echo "FAIL: EspoCRM contact for ${TEST_EMAIL} not found after ${TIMEOUT}s."
     echo "      Check: docker compose logs espocrm_consumer"
     exit 1
 fi
 
-# ── 4. Durability test hint ──────────────────────────────────────────────────
+# ── 4. Durability test pointer ───────────────────────────────────────────────
 echo ""
-echo "Durability test (manual):"
-echo "  docker compose stop espocrm"
-echo "  # place orders, verify they queue in northstar.crm.orders"
-echo "  docker compose start espocrm"
-echo "  # wait 30s, verify all orders processed without duplicates"
-echo "  docker compose logs espocrm_consumer | grep 'Processed order'"
+echo "Durability (QA5 'survives consumer downtime'): run ./scripts/test-durability.sh"
+echo "  It stops the consumer, publishes N orders, restarts RabbitMQ to prove on-disk"
+echo "  persistence, then drains with zero loss."

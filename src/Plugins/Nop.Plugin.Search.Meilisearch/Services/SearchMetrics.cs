@@ -13,4 +13,7 @@ internal static class SearchMetrics
 
     public static readonly Counter<long> SearchFallbackTotal =
         _meter.CreateCounter<long>("search_fallback_total", description: "Searches that threw and triggered nopCommerce's DB fallback path.");
+
+    public static readonly Counter<long> ResyncTotal =
+        _meter.CreateCounter<long>("search_resync_total", description: "Bulk reindexes triggered after a Meilisearch outage recovery.");
 }
