@@ -29,15 +29,7 @@ Five Architectural Decision Records (ADR-001 to ADR-005) plus a transactional ou
 ├── docker-compose.yml              Full federated stack (8 subsystems / 13 containers, see §4)
 ├── Dockerfile                      nopCommerce build (used by nop_bu1 / nop_bu2)
 ├── SETUP.md                        Setup, run, and demo guide (full version of §5)
-├── scripts/
-│   ├── install-nop.sh              Idempotent installer: seeds both BUs, installs plugins,
-│   │                               wires Keycloak + Meilisearch + ERP + RabbitMQ settings
-│   ├── test-isolation.sh           ADR-001 verification
-│   ├── test-sso.sh                 ADR-002 verification
-│   ├── test-outbox.sh              ADR-003 verification
-│   ├── test-erp-failure.sh         ADR-004 circuit-breaker open path
-│   ├── test-erp-recovery.sh        ADR-004 circuit-breaker close path
-│   └── test-search.sh              ADR-005 live / fallback / recovery
+├── scripts/                        install-nop.sh + per-ADR test/demo scripts (all listed in SETUP.md)
 ├── infra/                          Deployment & ops assets (bind-mounted by compose)
 │   ├── spike/
 │   │   ├── docker-compose.spike.yml    Original Keycloak-only spike (kept for reference)
@@ -62,7 +54,6 @@ Five Architectural Decision Records (ADR-001 to ADR-005) plus a transactional ou
 │       └── ErpStub/                ADR-004 BU-local fake ERP (toggleable failure mode)
 └── docs/                           Deliverables & write-ups
     ├── assignment/                 Assignment brief PDFs
-    ├── IMPLEMENTATION_PLAN.md       Phased build plan
     ├── part1/                      Part 1 deliverables: Report1.pdf + Presentation1.pdf
     └── part2/                      Part 2 deliverables: Report2.pdf + Presentation2.pdf
 ```
@@ -121,7 +112,7 @@ nop_bu1 (8081)  ──── nop_bu2 (8082)
 rabbitmq (5672/15672)
 meilisearch (7700)
 espocrm_db (MariaDB) + espocrm (8083)
-espocrm_consumer (worker, no port)
+espocrm_consumer (worker, metrics on 9003)
 erp_bu1 (9001) + erp_bu2 (9002)
 ```
 
@@ -131,43 +122,19 @@ Per-BU isolation is enforced by environment variables (each BU only knows its ow
 
 ## 5. Running and verifying the assignment
 
-For the full setup, service URLs, demo scripts, and presentation walkthrough, see [`SETUP.md`](SETUP.md). The short version:
-
 ```bash
-# 1. Start the full federated stack + observability overlay
 docker compose -f docker-compose.yml -f docker-compose.observability.yml up --build -d
-
-# 2. Seed both BUs, install plugins, wire Keycloak / Meilisearch / ERP / RabbitMQ settings
 ./scripts/install-nop.sh
-
-# 3. Run the smoke tests for each ADR (each script prints PASS/FAIL per check)
-./scripts/test-isolation.sh
-./scripts/test-sso.sh
-./scripts/test-outbox.sh
-./scripts/test-erp-failure.sh && ./scripts/test-erp-recovery.sh
-./scripts/test-search.sh
 ```
 
-URLs once the stack is up:
-
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| **Group Portal** | <http://localhost:8000> | — |
-| BU1 storefront (HomeStyle) | <http://localhost:8081> | — |
-| BU2 storefront (WorkSpace) | <http://localhost:8082> | — |
-| Keycloak admin | <http://localhost:8080> | admin / admin |
-| RabbitMQ management | <http://localhost:15672> | northstar / northstar |
-| Meilisearch | <http://localhost:7700> | — |
-| EspoCRM | <http://localhost:8083> | admin / admin |
-| ERP stub BU1 | <http://localhost:9001/health> | — |
-| ERP stub BU2 | <http://localhost:9002/health> | — |
-| BU1 metrics (`/metrics`) | <http://localhost:9101/metrics> | — |
-| BU2 metrics (`/metrics`) | <http://localhost:9102/metrics> | — |
-| **Prometheus** | <http://localhost:9090> | — |
-| **Grafana (ADR evidence)** | <http://localhost:3000> | admin / admin |
+That brings up the full stack and seeds both BUs. The complete guide - service URLs, every test and demo script, and the presentation walkthrough - is in [`SETUP.md`](SETUP.md).
 
 ---
 
 ## 6. Documentation deliverables
 
-The written deliverables for Part 1 (current-state analysis, quality-attribute scenarios, framework choice, target architecture, ADRs, risk plan, spike report) are bundled in `docs/part1/` as `Report1.pdf` (with the slides in `Presentation1.pdf`). The spike report is also available as Markdown under `infra/spike/SPIKE_REPORT.md`.
+**Part 1** (current-state analysis, quality-attribute scenarios, framework choice, target architecture, ADRs, risk plan, spike report) is in `docs/part1/` as `Report1.pdf`, with the slides in `Presentation1.pdf`.
+
+**Part 2** (the implementation, the five ADRs revisited in Accepted form, and the evidence) is in `docs/part2/` as `Report2.pdf`, with the slides in `Presentation2.pdf`. The setup, run, and demo guide is [`SETUP.md`](SETUP.md) at the repo root.
+
+The feasibility spike write-up is also available as Markdown under `infra/spike/SPIKE_REPORT.md`.

@@ -1,6 +1,6 @@
 name: northstar
 
-# Full federated commerce infrastructure (Phase 0 of docs/IMPLEMENTATION_PLAN.md).
+# Full federated commerce infrastructure.
 # Replaces the legacy single-instance compose and the spike compose.
 # Brings up the 8 subsystems referenced by ADRs 001-005 in one `docker compose up`.
 
