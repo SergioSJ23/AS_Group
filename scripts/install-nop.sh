@@ -20,6 +20,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
 
 echo "==> Pre-flight checks"
+# Host tools the script relies on. Kept minimal so the install works on a clean
+# machine: image parsing uses pure grep, not jq.
+for tool in docker curl; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+        echo "FAIL: required tool '${tool}' not found on PATH. Install it and re-run."
+        exit 1
+    fi
+done
 for c in northstar-db_bu1-1 northstar-db_bu2-1 northstar-nop_bu1-1 northstar-nop_bu2-1; do
     if ! docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null | grep -q true; then
         echo "FAIL: container '${c}' is not running. Run 'docker compose up -d' first, wait ~30s, then re-run this script."
@@ -29,13 +37,13 @@ done
 echo "    all required containers running"
 
 # nopCommerce installer checks write permissions on wwwroot/images/uploaded.
-# The directory is bind-mounted from ./assets/images/bu{1,2} which may be owned
+# The directory is bind-mounted from ./infra/assets/images/bu{1,2} which may be owned
 # by the host user (non-root). Ensure the directory is world-writable so the
 # installer's ACL check passes regardless of ownership.
 echo "==> Fixing bind-mount permissions for installer ACL check"
 chmod -f 777 \
-    "${SCRIPT_DIR}/../assets/images/bu1" \
-    "${SCRIPT_DIR}/../assets/images/bu2" 2>/dev/null || true
+    "${SCRIPT_DIR}/../infra/assets/images/bu1" \
+    "${SCRIPT_DIR}/../infra/assets/images/bu2" 2>/dev/null || true
 echo "    done"
 
 # Waits until a nopCommerce port responds with any HTTP status code (including 302
@@ -586,7 +594,7 @@ upload_product_images () {
     local base="http://localhost:${host_port}"
     local db_container="northstar-db_${bu}-1"
     local db_name="nop_${bu}"
-    local assets_dir="${SCRIPT_DIR}/../assets/images/${bu}"
+    local assets_dir="${SCRIPT_DIR}/../infra/assets/images/${bu}"
     local cookies
     cookies=$(mktemp)
     trap 'rm -f "$cookies"' RETURN
@@ -654,7 +662,10 @@ upload_product_images () {
             -H "X-Requested-With: XMLHttpRequest" \
             -F "__RequestVerificationToken=${token}" \
             -F "qqfile=@${img_file}")
-        pic_id=$(echo "$response" | jq -r '.pictureId // empty' 2>/dev/null)
+        # Extract "pictureId": N from the JSON response with grep so the script
+        # has no jq dependency (clean-machine friendly). The leading colon avoids
+        # matching other numeric fields.
+        pic_id=$(printf '%s' "$response" | grep -oE '"pictureId"[[:space:]]*:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | head -1)
 
         if [ -z "$pic_id" ] || [ "$pic_id" = "null" ]; then
             echo "    WARN: upload failed for ${img_file}: ${response}"
@@ -719,10 +730,67 @@ apply_visual_fixups () {
 apply_visual_fixups bu1
 apply_visual_fixups bu2
 
+# Emits comma-separated Meilisearch document objects for one BU. Name/price/slug
+# are fixed demo content, but pictureUrl is resolved from each product's actual
+# mapped picture in the DB (id + SEO filename), so the portal images stay correct
+# even if picture ids shift between runs (e.g. an interrupted earlier install).
+build_bu_docs () {
+    local bu="$1" port="$2"
+    local db_container="northstar-db_${bu}-1" db_name="nop_${bu}"
+
+    # productId|sku|slug|name|description|price
+    local rows
+    if [ "$bu" = "bu1" ]; then
+        rows=(
+            "1|HS-SOFA-001|linen-sofa|Linen Sofa|Handcrafted 3-seater sofa with solid oak legs.|1249.00"
+            "2|HS-TABLE-001|walnut-coffee-table|Walnut Coffee Table|Solid walnut top, 120x60 cm.|449.00"
+            "3|HS-LIGHT-001|rattan-pendant-light|Rattan Pendant Light|Handwoven rattan lamp, 40 cm diameter.|129.00"
+            "4|HS-LIGHT-002|marble-table-lamp|Marble Table Lamp|White Carrara marble base with a linen shade.|189.00"
+        )
+    else
+        rows=(
+            "1|WS-CHAIR-001|ergonomic-mesh-chair|Ergonomic Mesh Chair|Full-mesh back, 4D armrests, lumbar support.|699.00"
+            "2|WS-DESK-001|adjustable-standing-desk|Adjustable Standing Desk|Electric sit-stand, 140x70 cm bamboo top.|849.00"
+            "3|WS-MON-001|27-ultrawide-monitor|27\" Ultrawide Monitor|QHD IPS panel, 144 Hz, USB-C 90W PD.|549.00"
+            "4|WS-ACC-001|cable-management-kit|Cable Management Kit|Under-desk tray, 10 velcro ties, 3 cable clips.|39.00"
+        )
+    fi
+
+    local out="" first=1 row pid sku slug name desc price picinfo picid seo picurl
+    for row in "${rows[@]}"; do
+        IFS='|' read -r pid sku slug name desc price <<<"$row"
+
+        # Resolve the actual mapped picture (id + SEO) for this product.
+        picinfo=$(docker exec "$db_container" psql -U nop -d "$db_name" -tAc \
+            "SELECT p.\"Id\" || '|' || p.\"SeoFilename\"
+             FROM \"Product_Picture_Mapping\" ppm
+             JOIN \"Picture\" p ON p.\"Id\" = ppm.\"PictureId\"
+             WHERE ppm.\"ProductId\" = ${pid}
+             ORDER BY ppm.\"DisplayOrder\" LIMIT 1;")
+        picid="${picinfo%%|*}"
+        seo="${picinfo##*|}"
+        picurl=""
+        if [ -n "$picid" ] && [ -n "$seo" ]; then
+            picurl=$(printf 'http://localhost:%s/images/thumbs/%07d_%s_415.jpeg' "$port" "$picid" "$seo")
+        else
+            echo "    WARN: no mapped picture for ${bu} product ${pid} (${sku})" >&2
+        fi
+
+        # JSON-escape embedded double quotes (e.g. 27" monitor).
+        name=${name//\"/\\\"}
+        desc=${desc//\"/\\\"}
+
+        [ "$first" -eq 1 ] || out+=","
+        first=0
+        out+=$(printf '{"id":"%s-%s","productId":%s,"buId":"%s","name":"%s","description":"%s","sku":"%s","slug":"%s","price":%s,"pictureUrl":"%s"}' \
+            "$bu" "$pid" "$pid" "$bu" "$name" "$desc" "$sku" "$slug" "$price" "$picurl")
+    done
+    printf '%s' "$out"
+}
+
 # Phase F: seed Meilisearch with all product fields including pictureUrls.
 # The BulkIndexAsync triggered by plugin install is unreliable on first boot;
 # this guarantees the portal at :8000 shows real products on every clean run.
-# pic_ids are always 3-6 (first 2 are system banners, then products in insert order).
 seed_meilisearch () {
     local meili="${MEILI_URL:-http://localhost:7700}"
     local key="${MEILI_KEY:-northstar-meili-master-key}"
@@ -737,18 +805,12 @@ seed_meilisearch () {
         -H "Authorization: Bearer ${key}" -H "Content-Type: application/json" \
         -d '["buId"]'
 
+    local docs
+    docs="$(build_bu_docs bu1 8081),$(build_bu_docs bu2 8082)"
+
     curl -s -o /dev/null -X POST "${meili}/indexes/products/documents?primaryKey=id" \
         -H "Authorization: Bearer ${key}" -H "Content-Type: application/json" \
-        -d '[
-          {"id":"bu1-1","productId":1,"buId":"bu1","name":"Linen Sofa","description":"Handcrafted 3-seater sofa with solid oak legs.","sku":"HS-SOFA-001","slug":"linen-sofa","price":1249.00,"pictureUrl":"http://localhost:8081/images/thumbs/0000003_linen-sofa_415.jpeg"},
-          {"id":"bu1-2","productId":2,"buId":"bu1","name":"Walnut Coffee Table","description":"Solid walnut top, 120x60 cm.","sku":"HS-TABLE-001","slug":"walnut-coffee-table","price":449.00,"pictureUrl":"http://localhost:8081/images/thumbs/0000004_walnut-coffee-table_415.jpeg"},
-          {"id":"bu1-3","productId":3,"buId":"bu1","name":"Rattan Pendant Light","description":"Handwoven rattan lamp, 40 cm diameter.","sku":"HS-LIGHT-001","slug":"rattan-pendant-light","price":129.00,"pictureUrl":"http://localhost:8081/images/thumbs/0000005_rattan-pendant-light_415.jpeg"},
-          {"id":"bu1-4","productId":4,"buId":"bu1","name":"Marble Table Lamp","description":"White Carrara marble base with a linen shade.","sku":"HS-LIGHT-002","slug":"marble-table-lamp","price":189.00,"pictureUrl":"http://localhost:8081/images/thumbs/0000006_marble-table-lamp_415.jpeg"},
-          {"id":"bu2-1","productId":1,"buId":"bu2","name":"Ergonomic Mesh Chair","description":"Full-mesh back, 4D armrests, lumbar support.","sku":"WS-CHAIR-001","slug":"ergonomic-mesh-chair","price":699.00,"pictureUrl":"http://localhost:8082/images/thumbs/0000003_ergonomic-mesh-chair_415.jpeg"},
-          {"id":"bu2-2","productId":2,"buId":"bu2","name":"Adjustable Standing Desk","description":"Electric sit-stand, 140x70 cm bamboo top.","sku":"WS-DESK-001","slug":"adjustable-standing-desk","price":849.00,"pictureUrl":"http://localhost:8082/images/thumbs/0000004_adjustable-standing-desk_415.jpeg"},
-          {"id":"bu2-3","productId":3,"buId":"bu2","name":"27\" Ultrawide Monitor","description":"QHD IPS panel, 144 Hz, USB-C 90W PD.","sku":"WS-MON-001","slug":"27-ultrawide-monitor","price":549.00,"pictureUrl":"http://localhost:8082/images/thumbs/0000005_27-ultrawide-monitor_415.jpeg"},
-          {"id":"bu2-4","productId":4,"buId":"bu2","name":"Cable Management Kit","description":"Under-desk tray, 10 velcro ties, 3 cable clips.","sku":"WS-ACC-001","slug":"cable-management-kit","price":39.00,"pictureUrl":"http://localhost:8082/images/thumbs/0000006_cable-management-kit_415.jpeg"}
-        ]'
+        -d "[${docs}]"
 
     echo "    8 documents upserted"
 

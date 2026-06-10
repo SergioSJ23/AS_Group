@@ -1,6 +1,6 @@
 name: northstar
 
-# Full federated commerce infrastructure (Phase 0 of IMPLEMENTATION_PLAN.md).
+# Full federated commerce infrastructure (Phase 0 of docs/IMPLEMENTATION_PLAN.md).
 # Replaces the legacy single-instance compose and the spike compose.
 # Brings up the 8 subsystems referenced by ADRs 001-005 in one `docker compose up`.
 
@@ -23,7 +23,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./spike/keycloak/realm-northstar.json:/opt/keycloak/data/import/realm-northstar.json:ro
+      - ./infra/spike/keycloak/realm-northstar.json:/opt/keycloak/data/import/realm-northstar.json:ro
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
       interval: 10s
@@ -40,7 +40,7 @@ services:
       POSTGRES_PASSWORD: noppassword
     volumes:
       - db_bu1_data:/var/lib/postgresql/data
-      - ./spike/pg-init:/docker-entrypoint-initdb.d:ro
+      - ./infra/spike/pg-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nop -d nop_bu1"]
       interval: 5s
@@ -55,7 +55,7 @@ services:
       POSTGRES_PASSWORD: noppassword
     volumes:
       - db_bu2_data:/var/lib/postgresql/data
-      - ./spike/pg-init:/docker-entrypoint-initdb.d:ro
+      - ./infra/spike/pg-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nop -d nop_bu2"]
       interval: 5s
@@ -64,7 +64,7 @@ services:
   # ── RabbitMQ (transactional outbox broker, ADR-003) ───────────────────────
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
-    # Enable the bundled rabbitmq_prometheus plugin so observability/prometheus.yml
+    # Enable the bundled rabbitmq_prometheus plugin so infra/observability/prometheus/prometheus.yml
     # can scrape rabbitmq:15692 with zero application code changes.
     command: >
       sh -c "rabbitmq-plugins enable --offline rabbitmq_prometheus
@@ -90,7 +90,7 @@ services:
     environment:
       MEILI_ENV: development
       MEILI_MASTER_KEY: northstar-meili-master-key
-      # Native Prometheus exporter on /metrics. Picked up by observability/prometheus.yml.
+      # Native Prometheus exporter on /metrics. Picked up by infra/observability/prometheus/prometheus.yml.
       MEILI_EXPERIMENTAL_ENABLE_METRICS: "true"
     ports:
       - "7700:7700"
@@ -153,7 +153,7 @@ services:
       ESPOCRM_URL: http://espocrm:80/
       ESPOCRM_USER: admin
       ESPOCRM_PASS: admin
-      # Prometheus metrics endpoint — scraped by observability/prometheus.yml
+      # Prometheus metrics endpoint — scraped by infra/observability/prometheus/prometheus.yml
       ASPNETCORE_URLS: http://+:9003
     ports:
       - "9003:9003"
@@ -203,6 +203,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8081:80"
+      - "9101:9101"   # Prometheus /metrics (isolated from the DB-bound pipeline)
     environment:
       # Connection string is intentionally absent here so that IsDatabaseInstalled()
       # returns false on a fresh volume, allowing the web installer to run and seed
@@ -221,7 +222,7 @@ services:
       KEYCLOAK_CLIENT_SECRET: bu1-secret
     volumes:
       - nop_bu1_app_data:/app/App_Data
-      - ./assets/images/bu1:/app/wwwroot/images/uploaded
+      - ./infra/assets/images/bu1:/app/wwwroot/images/uploaded
       - nop_bu1_thumbs:/app/wwwroot/images/thumbs
     depends_on:
       db_bu1:
@@ -243,8 +244,8 @@ services:
     ports:
       - "8000:80"
     volumes:
-      - ./portal:/usr/share/nginx/html:ro
-      - ./portal/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./infra/portal:/usr/share/nginx/html:ro
+      - ./infra/portal/nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
   # ── nopCommerce BU2 (WorkSpace) ───────────────────────────────────────────
   nop_bu2:
@@ -253,6 +254,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8082:80"
+      - "9102:9101"   # Prometheus /metrics (isolated from the DB-bound pipeline)
     environment:
       # See nop_bu1 comment above — same pattern, isolated to db_bu2.
       # ADR-001: isolated connection — points only to db_bu2, never db_bu1
@@ -267,7 +269,7 @@ services:
       KEYCLOAK_CLIENT_SECRET: bu2-secret
     volumes:
       - nop_bu2_app_data:/app/App_Data
-      - ./assets/images/bu2:/app/wwwroot/images/uploaded
+      - ./infra/assets/images/bu2:/app/wwwroot/images/uploaded
       - nop_bu2_thumbs:/app/wwwroot/images/thumbs
     depends_on:
       db_bu2:

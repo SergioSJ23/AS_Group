@@ -33,7 +33,7 @@ re-authentication.
 From the repo root:
 
 ```bash
-docker compose -f spike/docker-compose.spike.yml up --build
+docker compose -f infra/spike/docker-compose.spike.yml up --build
 ```
 
 The `--build` flag compiles nopCommerce including the Keycloak plugin.
@@ -112,15 +112,15 @@ in the `verified-customer` group.
 Check that each BU created a `Customer` row keyed by the Keycloak `sub` claim:
 
 ```bash
-# BU1
-docker exec -it $(docker compose -f spike/docker-compose.spike.yml ps -q db_bu1) \
+# BU1 — Customer row created for alice
+docker exec -it $(docker compose -f infra/spike/docker-compose.spike.yml ps -q db_bu1) \
   psql -U nop -d nop_bu1 -c \
-  "SELECT Id, Email, ExternalAuthenticationRecordId FROM Customer WHERE Email = 'alice@example.com';"
+  "SELECT \"Id\", \"Email\" FROM \"Customer\" WHERE \"Email\" = 'alice@example.com';"
 
-# Check ExternalAuthenticationRecord.ExternalIdentifier = Keycloak sub
-docker exec -it $(docker compose -f spike/docker-compose.spike.yml ps -q db_bu1) \
+# BU1 — ExternalAuthenticationRecord.ExternalIdentifier = Keycloak sub
+docker exec -it $(docker compose -f infra/spike/docker-compose.spike.yml ps -q db_bu1) \
   psql -U nop -d nop_bu1 -c \
-  "SELECT * FROM ExternalAuthenticationRecord WHERE ProviderSystemName = 'ExternalAuth.Keycloak';"
+  "SELECT \"ExternalIdentifier\", \"Email\" FROM \"ExternalAuthenticationRecord\";"
 
 # BU2 — same queries against db_bu2
 ```
@@ -161,7 +161,7 @@ The browser must send the Keycloak session cookie. Ensure:
 **nopCommerce shows 500 after wizard**
 Run migrations manually:
 ```bash
-docker compose -f spike/docker-compose.spike.yml restart nop_bu1
+docker compose -f infra/spike/docker-compose.spike.yml restart nop_bu1
 ```
 
 ---
@@ -169,7 +169,7 @@ docker compose -f spike/docker-compose.spike.yml restart nop_bu1
 ## Clean up
 
 ```bash
-docker compose -f spike/docker-compose.spike.yml down -v
+docker compose -f infra/spike/docker-compose.spike.yml down -v
 ```
 
 This removes containers and volumes (DB data). The built images are kept for faster restarts.

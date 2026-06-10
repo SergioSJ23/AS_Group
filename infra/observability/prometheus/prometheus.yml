@@ -28,13 +28,16 @@ scrape_configs:
     static_configs:
       - targets: ["meilisearch:7700"]
 
+  # nopCommerce exposes /metrics on a dedicated port (9101), isolated from the
+  # DB-bound storefront pipeline so the scrape survives a BU database outage
+  # (ADR-001 isolation demo). See Program.cs MetricsPort.
   - job_name: nopcommerce
     metrics_path: /metrics
     static_configs:
-      - targets: ["nop_bu1:80"]
+      - targets: ["nop_bu1:9101"]
         labels:
           bu: bu1
-      - targets: ["nop_bu2:80"]
+      - targets: ["nop_bu2:9101"]
         labels:
           bu: bu2
 

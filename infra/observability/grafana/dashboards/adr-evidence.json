@@ -19,17 +19,17 @@
       },
       "id": 50,
       "panels": [],
-      "title": "ADR-001 \u2014 Per-BU process and data isolation",
+      "title": "ADR-001 — Per-BU process and data isolation",
       "type": "row"
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "datasource",
+        "uid": "-- Mixed --"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
+          "unit": "short",
           "custom": {
             "lineWidth": 2
           }
@@ -93,13 +93,26 @@
       },
       "targets": [
         {
-          "expr": "sum by (bu) (rate(http_server_request_duration_seconds_count[30s])) or sum by (bu) (rate(http_server_request_duration_seconds_count[30s])) * 0",
-          "legendFormat": "{{bu}}",
-          "refId": "A"
+          "refId": "A",
+          "datasource": {
+            "type": "postgres",
+            "uid": "pg_bu1"
+          },
+          "rawSql": "SELECT now() AS \"time\", count(*) AS \"bu1\" FROM \"Order\" WHERE \"Deleted\" = false",
+          "format": "time_series"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "postgres",
+            "uid": "pg_bu2"
+          },
+          "rawSql": "SELECT now() AS \"time\", count(*) AS \"bu2\" FROM \"Order\" WHERE \"Deleted\" = false",
+          "format": "time_series"
         }
       ],
-      "title": "HTTP request rate per BU \u2014 proves independent operation",
-      "description": "Both BUs serve traffic independently. During the ADR-001 isolation demo (docker stop db_bu1), BU1 drops to 0 while BU2 continues unaffected.",
+      "title": "Orders per BU (live count from each BU database) — data isolation proof",
+      "description": "Order count queried directly from each BU's PostgreSQL database. During the ADR-001 isolation demo (docker stop db_bu1), the BU1 series stops reporting while BU2 continues — proving the databases are isolated.",
       "type": "timeseries"
     },
     {
@@ -198,7 +211,7 @@
           "refId": "A"
         }
       ],
-      "title": "nopCommerce process availability per BU \u2014 isolation proof",
+      "title": "nopCommerce process availability per BU — isolation proof",
       "description": "1 = process healthy and scraping. 0 = process unreachable. When db_bu1 is stopped, nop_bu1 becomes unreachable (up=0) while nop_bu2 stays fully operational (up=1). This is the isolation proof: one process failure does not reach the other.",
       "type": "timeseries"
     },
@@ -212,7 +225,7 @@
       },
       "id": 100,
       "panels": [],
-      "title": "ADR-003 \u2014 Transactional outbox \u2192 RabbitMQ \u2192 CRM",
+      "title": "ADR-003 — Transactional outbox → RabbitMQ → CRM",
       "type": "row"
     },
     {
@@ -313,7 +326,7 @@
       ],
       "title": "Publish rate + RabbitMQ queue depth",
       "type": "timeseries",
-      "description": "Outbox relay publish rate per BU and RabbitMQ queue depth. Queue depth spikes when CRM consumer is down \u2014 drains on recovery."
+      "description": "Outbox relay publish rate per BU and RabbitMQ queue depth. Queue depth spikes when CRM consumer is down — drains on recovery."
     },
     {
       "collapsed": false,
@@ -325,7 +338,7 @@
       },
       "id": 200,
       "panels": [],
-      "title": "ADR-004 \u2014 ERP circuit breaker",
+      "title": "ADR-004 — ERP circuit breaker",
       "type": "row"
     },
     {
@@ -399,7 +412,7 @@
       ],
       "title": "Breaker state over time (0=closed, 1=half-open, 2=open)",
       "type": "timeseries",
-      "description": "State timeline per BU. Line goes 0\u21922 when ERP fails (OPEN), 2\u21921 after cooldown (HALF-OPEN probe), 1\u21920 when probe succeeds (CLOSED).",
+      "description": "State timeline per BU. Line goes 0→2 when ERP fails (OPEN), 2→1 after cooldown (HALF-OPEN probe), 1→0 when probe succeeds (CLOSED).",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -512,7 +525,7 @@
       },
       "id": 300,
       "panels": [],
-      "title": "ADR-005 \u2014 Meilisearch with DB fallback",
+      "title": "ADR-005 — Meilisearch with DB fallback",
       "type": "row"
     },
     {
@@ -613,7 +626,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Northstar \u2014 ADR Evidence",
+  "title": "Northstar — ADR Evidence",
   "uid": "northstar-adr-evidence",
   "version": 2,
   "weekStart": ""

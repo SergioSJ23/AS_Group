@@ -57,7 +57,7 @@ services:
   # ── nopCommerce BU1 (HomeStyle) ───────────────────────────────────────────
   nop_bu1:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     ports:
       - "8081:80"
@@ -71,7 +71,7 @@ services:
   # ── nopCommerce BU2 (WorkSpace) ───────────────────────────────────────────
   nop_bu2:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     ports:
       - "8082:80"

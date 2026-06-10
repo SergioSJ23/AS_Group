@@ -48,7 +48,9 @@ WORKDIR /app
 
 COPY --from=build /app/published .
 
-ENV ASPNETCORE_URLS=http://+:80
-EXPOSE 80
+# :80 serves the storefront, :9101 serves the Prometheus /metrics endpoint
+# (isolated from the DB-bound pipeline — see Program.cs MetricsPort).
+ENV ASPNETCORE_URLS=http://+:80;http://+:9101
+EXPOSE 80 9101
                             
 ENTRYPOINT ["dotnet", "Nop.Web.dll"]

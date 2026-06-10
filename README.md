@@ -4,6 +4,8 @@ This repository contains the team's implementation for the **Group Assignment** 
 
 The vendor's original project README is preserved in [`README.Original.md`](README.Original.md).
 
+> **Disclaimer:** Parts of this project (implementation, infrastructure, scripts, and documentation) were produced with the assistance of Anthropic's Claude Opus 4.7 and 4.8 models.
+
 ---
 
 ## 1. What was implemented
@@ -24,8 +26,9 @@ Five Architectural Decision Records (ADR-001 to ADR-005) plus a transactional ou
 
 ```
 .
-├── docker-compose.yml              Full federated stack (8 services, see §4)
+├── docker-compose.yml              Full federated stack (8 subsystems / 13 containers, see §4)
 ├── Dockerfile                      nopCommerce build (used by nop_bu1 / nop_bu2)
+├── SETUP.md                        Setup, run, and demo guide (full version of §5)
 ├── scripts/
 │   ├── install-nop.sh              Idempotent installer: seeds both BUs, installs plugins,
 │   │                               wires Keycloak + Meilisearch + ERP + RabbitMQ settings
@@ -35,12 +38,17 @@ Five Architectural Decision Records (ADR-001 to ADR-005) plus a transactional ou
 │   ├── test-erp-failure.sh         ADR-004 circuit-breaker open path
 │   ├── test-erp-recovery.sh        ADR-004 circuit-breaker close path
 │   └── test-search.sh              ADR-005 live / fallback / recovery
-├── spike/
-│   ├── docker-compose.spike.yml    Original Keycloak-only spike (kept for reference)
-│   ├── keycloak/realm-northstar.json  Realm pre-loaded with bu1/bu2 OIDC clients + test user
-│   ├── pg-init/01-citext.sql       Postgres extension needed by nopCommerce migrations
-│   ├── HOW_TO_TEST.md              Walkthrough for the SSO spike
-│   └── SPIKE_REPORT.md             Spike write-up (ADR-002)
+├── infra/                          Deployment & ops assets (bind-mounted by compose)
+│   ├── spike/
+│   │   ├── docker-compose.spike.yml    Original Keycloak-only spike (kept for reference)
+│   │   ├── keycloak/realm-northstar.json  Realm pre-loaded with bu1/bu2 OIDC clients + test user
+│   │   ├── pg-init/01-citext.sql       Postgres extension needed by nopCommerce migrations
+│   │   ├── HOW_TO_TEST.md              Walkthrough for the SSO spike
+│   │   └── SPIKE_REPORT.md             Spike write-up (ADR-002)
+│   ├── assets/images/bu{1,2}/      Seed product images bind-mounted into each storefront
+│   ├── observability/              Prometheus + Grafana provisioning and dashboards
+│   ├── portal/                     Static landing page + nginx config
+│   └── loadtests/                  k6 scenarios + lib (driven by scripts/run-loadtest.sh)
 ├── src/
 │   ├── Libraries/Nop.Services/Catalog/ProductService.cs
 │   │       Vendor file patched for ADR-005 (linq2db / in-memory-results compatibility)
@@ -52,7 +60,11 @@ Five Architectural Decision Records (ADR-001 to ADR-005) plus a transactional ou
 │   └── Workers/
 │       ├── EspoCrmConsumer/        ADR-003 RabbitMQ -> EspoCRM REST relay
 │       └── ErpStub/                ADR-004 BU-local fake ERP (toggleable failure mode)
-└── docs/part1/                     Part 1 deliverable PDFs (report + images)
+└── docs/                           Deliverables & write-ups
+    ├── assignment/                 Assignment brief PDFs
+    ├── IMPLEMENTATION_PLAN.md       Phased build plan
+    ├── part1/                      Part 1 deliverables: Report1.pdf + Presentation1.pdf
+    └── part2/                      Part 2 deliverables: Report2.pdf + Presentation2.pdf
 ```
 
 The plugins live inside the original `src/Plugins/` tree so they are picked up by the standard nopCommerce plugin loader. The vendor PRs/forks of upstream nopCommerce files are limited to a single file (`ProductService.cs`); every other change is additive.
@@ -100,7 +112,7 @@ These are the only edits to upstream code; everything else lives in plugins.
 
 ## 4. Runtime topology (`docker-compose.yml`)
 
-Single `docker compose up` brings up the eight services that back ADR-001..005:
+Single `docker compose up` brings up the eight subsystems that back ADR-001..005 (13 containers; the portal and the observability overlay add the rest):
 
 ```
 keycloak (8080) ──── shared IdP for both BUs
@@ -113,11 +125,13 @@ espocrm_consumer (worker, no port)
 erp_bu1 (9001) + erp_bu2 (9002)
 ```
 
-Per-BU isolation is enforced by environment variables (each BU only knows its own `db_*`, `erp_*`, OIDC client) and by separate App_Data volumes (`nop_bu1_app_data`, `nop_bu2_app_data`). The realm import file under `spike/keycloak/` is mounted into Keycloak so OIDC clients and the test user exist on the first boot.
+Per-BU isolation is enforced by environment variables (each BU only knows its own `db_*`, `erp_*`, OIDC client) and by separate App_Data volumes (`nop_bu1_app_data`, `nop_bu2_app_data`). The realm import file under `infra/spike/keycloak/` is mounted into Keycloak so OIDC clients and the test user exist on the first boot.
 
 ---
 
 ## 5. Running and verifying the assignment
+
+For the full setup, service URLs, demo scripts, and presentation walkthrough, see [`SETUP.md`](SETUP.md). The short version:
 
 ```bash
 # 1. Start the full federated stack + observability overlay
@@ -147,6 +161,8 @@ URLs once the stack is up:
 | EspoCRM | <http://localhost:8083> | admin / admin |
 | ERP stub BU1 | <http://localhost:9001/health> | — |
 | ERP stub BU2 | <http://localhost:9002/health> | — |
+| BU1 metrics (`/metrics`) | <http://localhost:9101/metrics> | — |
+| BU2 metrics (`/metrics`) | <http://localhost:9102/metrics> | — |
 | **Prometheus** | <http://localhost:9090> | — |
 | **Grafana (ADR evidence)** | <http://localhost:3000> | admin / admin |
 
@@ -154,4 +170,4 @@ URLs once the stack is up:
 
 ## 6. Documentation deliverables
 
-The written deliverables for Part 1 (current-state analysis, quality-attribute scenarios, framework choice, target architecture, ADRs, risk plan, spike report) are bundled in `docs/part1/` as `report/AS_Project-2.pdf`. The spike report is also available as Markdown under `spike/SPIKE_REPORT.md`.
+The written deliverables for Part 1 (current-state analysis, quality-attribute scenarios, framework choice, target architecture, ADRs, risk plan, spike report) are bundled in `docs/part1/` as `Report1.pdf` (with the slides in `Presentation1.pdf`). The spike report is also available as Markdown under `infra/spike/SPIKE_REPORT.md`.

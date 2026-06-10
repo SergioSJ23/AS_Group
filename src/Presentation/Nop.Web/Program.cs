@@ -8,6 +8,14 @@ namespace Nop.Web;
 
 public partial class Program
 {
+    // Dedicated port for the Prometheus scrape endpoint. Kept separate from the
+    // storefront port (80) so /metrics is served by a branched pipeline that does
+    // NOT run the DB-bound nopCommerce middleware. This keeps metrics responsive
+    // even when this BU's database is down (ADR-001 isolation demo), where the
+    // main pipeline would otherwise fail. Both BU containers listen on this same
+    // internal port; Prometheus scrapes nop_bu1:9101 / nop_bu2:9101.
+    private const int MetricsPort = 9101;
+
     public static async Task Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
@@ -53,12 +61,19 @@ public partial class Program
 
         var app = builder.Build();
 
+        // Prometheus scrape endpoint on the dedicated MetricsPort only. Branched off
+        // before the Nop pipeline so requests on this port never touch DB-bound
+        // middleware: /metrics stays up even when this BU's database is down.
+        app.MapWhen(
+            context => context.Connection.LocalPort == MetricsPort,
+            metricsApp =>
+            {
+                metricsApp.UseRouting();
+                metricsApp.UseEndpoints(endpoints => endpoints.MapPrometheusScrapingEndpoint());
+            });
+
         //configure the application HTTP request pipeline
         app.ConfigureRequestPipeline();
-
-        // Prometheus scrape endpoint at /metrics. Mapped after the Nop pipeline so the
-        // standard MVC routes win for everything else; /metrics is an exact-path match.
-        app.MapPrometheusScrapingEndpoint();
 
         await app.PublishAppStartedEventAsync();
 

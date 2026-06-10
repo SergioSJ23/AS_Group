@@ -20,7 +20,7 @@ if [[ -z "$scenario" ]]; then
 fi
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-script_path="loadtests/scenarios/${scenario}.js"
+script_path="infra/loadtests/scenarios/${scenario}.js"
 
 if [[ ! -f "$repo_root/$script_path" ]]; then
   echo "Scenario not found: $repo_root/$script_path" >&2
@@ -34,7 +34,7 @@ echo "→ Running $scenario on network=$network, remote-write=$prom_url"
 
 docker run --rm \
   --network "$network" \
-  -v "$repo_root/loadtests:/scripts:ro" \
+  -v "$repo_root/infra/loadtests:/scripts:ro" \
   -e K6_PROMETHEUS_RW_SERVER_URL="$prom_url" \
   -e K6_PROMETHEUS_RW_TREND_STATS="p(50),p(95),p(99),max" \
   grafana/k6:latest run \
