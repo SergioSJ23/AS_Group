@@ -11,7 +11,10 @@ set -euo pipefail
 
 BU1_URL="${BU1_URL:-http://localhost:8081}"
 BU2_URL="${BU2_URL:-http://localhost:8082}"
-DOWN_SECONDS="${DOWN_SECONDS:-60}"
+# Keep the DB down long enough for the Grafana "requests served" panel to settle:
+# that panel is rate(...[1m]), so BU1's line needs ~60s to decay to 0 after it
+# stops serving 200s, then we want a clear flat-0 plateau on top of that.
+DOWN_SECONDS="${DOWN_SECONDS:-150}"
 
 ts() { date +'%H:%M:%S'; }
 

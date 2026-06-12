@@ -41,6 +41,17 @@ scrape_configs:
         labels:
           bu: bu2
 
+  # ADR-001: per-BU Postgres health. pg_up = 1 when the BU database answers,
+  # 0 when it is down. Drives the database-availability panel on the dashboard.
+  - job_name: postgres
+    static_configs:
+      - targets: ["pg_exporter_bu1:9187"]
+        labels:
+          bu: bu1
+      - targets: ["pg_exporter_bu2:9187"]
+        labels:
+          bu: bu2
+
   # ADR-003: CRM consumer async relay — crm_messages_processed/failed/duplicate_total
   - job_name: espocrm_consumer
     metrics_path: /metrics

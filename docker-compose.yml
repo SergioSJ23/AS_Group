@@ -61,6 +61,27 @@ services:
       interval: 5s
       retries: 10
 
+  # ── Postgres exporters (ADR-001 evidence) ─────────────────────────────────
+  # One exporter per BU. Exposes pg_up=1 when the BU database answers a query,
+  # pg_up=0 when it does not. The exporter process stays up even while its DB is
+  # stopped, so Grafana shows a clean 1→0→1 line per BU during the isolation
+  # demo (docker compose stop db_bu1). Scraped internally by Prometheus on 9187.
+  pg_exporter_bu1:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    environment:
+      DATA_SOURCE_NAME: "postgresql://nop:noppassword@db_bu1:5432/nop_bu1?sslmode=disable"
+    depends_on:
+      - db_bu1
+    restart: unless-stopped
+
+  pg_exporter_bu2:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    environment:
+      DATA_SOURCE_NAME: "postgresql://nop:noppassword@db_bu2:5432/nop_bu2?sslmode=disable"
+    depends_on:
+      - db_bu2
+    restart: unless-stopped
+
   # ── RabbitMQ (transactional outbox broker, ADR-003) ───────────────────────
   rabbitmq:
     image: rabbitmq:3.13-management-alpine

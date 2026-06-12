@@ -24,14 +24,17 @@
     },
     {
       "datasource": {
-        "type": "datasource",
-        "uid": "-- Mixed --"
+        "type": "prometheus",
+        "uid": "prometheus"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "reqps",
+          "min": 0,
           "custom": {
-            "lineWidth": 2
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "spanNulls": true
           }
         },
         "overrides": [
@@ -93,26 +96,13 @@
       },
       "targets": [
         {
-          "refId": "A",
-          "datasource": {
-            "type": "postgres",
-            "uid": "pg_bu1"
-          },
-          "rawSql": "SELECT now() AS \"time\", count(*) AS \"bu1\" FROM \"Order\" WHERE \"Deleted\" = false",
-          "format": "time_series"
-        },
-        {
-          "refId": "B",
-          "datasource": {
-            "type": "postgres",
-            "uid": "pg_bu2"
-          },
-          "rawSql": "SELECT now() AS \"time\", count(*) AS \"bu2\" FROM \"Order\" WHERE \"Deleted\" = false",
-          "format": "time_series"
+          "expr": "sum by (bu) (rate(http_server_request_duration_seconds_count{job=\"nopcommerce\", http_response_status_code=~\"2..\", http_route=~\"/.*\", http_route!=\"/metrics\"}[1m]))",
+          "legendFormat": "{{bu}}",
+          "refId": "A"
         }
       ],
-      "title": "Orders per BU (live count from each BU database) — data isolation proof",
-      "description": "Order count queried directly from each BU's PostgreSQL database. During the ADR-001 isolation demo (docker stop db_bu1), the BU1 series stops reporting while BU2 continues — proving the databases are isolated.",
+      "title": "Storefront requests served per BU (HTTP 2xx/s) — data isolation proof",
+      "description": "Rate of successfully served storefront requests (HTTP 2xx, excluding the /metrics scrape) per BU, from the nopCommerce HTTP server metrics. During the ADR-001 isolation demo (docker compose stop db_bu1) BU1 can no longer serve pages so its line drops to 0, while BU2 keeps serving requests normally — proving the BUs are isolated.",
       "type": "timeseries"
     },
     {
@@ -128,7 +118,7 @@
           "custom": {
             "lineWidth": 2,
             "spanNulls": true,
-            "fillOpacity": 10
+            "fillOpacity": 30
           }
         },
         "overrides": [
@@ -206,13 +196,13 @@
       },
       "targets": [
         {
-          "expr": "up{job=\"nopcommerce\"}",
+          "expr": "pg_up",
           "legendFormat": "{{bu}}",
           "refId": "A"
         }
       ],
-      "title": "nopCommerce process availability per BU — isolation proof",
-      "description": "1 = process healthy and scraping. 0 = process unreachable. When db_bu1 is stopped, nop_bu1 becomes unreachable (up=0) while nop_bu2 stays fully operational (up=1). This is the isolation proof: one process failure does not reach the other.",
+      "title": "Per-BU database availability (1 = DB responding, 0 = DB down)",
+      "description": "pg_up from a postgres-exporter attached to each BU database. 1 = the BU's PostgreSQL answered a query on the last scrape, 0 = it did not. During the ADR-001 isolation demo (docker compose stop db_bu1) the BU1 line drops from 1 to 0 while BU2 stays at 1, then recovers to 1 when the database is restarted. The exporter process stays up throughout, so the line shows a clean 0 rather than going to 'No data'.",
       "type": "timeseries"
     },
     {
