@@ -16,6 +16,10 @@ MEILI_KEY="northstar-meili-master-key"
 BU1="http://localhost:8081"
 BU2="http://localhost:8082"
 KEYWORD="${KEYWORD:-book}"
+# How long to keep Meilisearch stopped. Must exceed the 30s MeilisearchResyncService
+# probe interval so the down->up edge is observed (reliable resync), and be long enough
+# that the outage is clearly visible as a gap in the Grafana ADR-005 panels.
+MEILI_DOWN_SECONDS="${MEILI_DOWN_SECONDS:-20}"
 
 echo "=== ADR-005 Federated search + DB fallback ==="
 echo
@@ -69,6 +73,11 @@ echo
 echo "    Expectations: HTTP 200 (DB fallback in ProductService), fallback-banner=yes."
 echo "    The yellow banner is rendered by Nop.Plugin.Search.Meilisearch's widget at"
 echo "    PublicWidgetZones.ProductSearchPageBeforeResults via the per-request FallbackSignal."
+
+echo
+echo "5b. Holding Meilisearch down ${MEILI_DOWN_SECONDS}s — long enough to show a clear gap in the"
+echo "    Grafana ADR-005 panels and to cross the 30s resync probe interval (reliable resync)."
+sleep "${MEILI_DOWN_SECONDS}"
 
 echo
 echo "6. Restarting meilisearch..."
